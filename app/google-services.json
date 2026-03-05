@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "124518057266",
+    "project_id": "myappproject-442cf",
+    "storage_bucket": "myappproject-442cf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:124518057266:android:abc3b0cad128a29bd1c32b",
+        "android_client_info": {
+          "package_name": "com.example.goproX"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "124518057266-hrveq1hf1udfqbe6amleg6ev2d57q3kp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_M3YCQcNeVL6buJ4ZdKsw_W6Cp9w__Mc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "124518057266-hrveq1hf1udfqbe6amleg6ev2d57q3kp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:124518057266:android:bb5c91366f1fd70dd1c32b",
+        "android_client_info": {
+          "package_name": "com.example.goprox"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "124518057266-o2357vcduknsltnjch01sv4il4bk1dhn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.goprox",
+            "certificate_hash": "2a2a1f61434302dea07a1141b427c45338c62191"
+          }
+        },
+        {
+          "client_id": "124518057266-hrveq1hf1udfqbe6amleg6ev2d57q3kp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_M3YCQcNeVL6buJ4ZdKsw_W6Cp9w__Mc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "124518057266-hrveq1hf1udfqbe6amleg6ev2d57q3kp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
