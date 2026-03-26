@@ -2,14 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.goprox">
 
-    <!-- Internet access needed for Firebase, Google, Facebook -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- SMS permissions for phone verification -->
-    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <uses-permission android:name="android.permission.READ_SMS"/>
-    <!-- Optional, marks that telephony is not required for app install -->
-    <uses-feature android:name="android.hardware.telephony" android:required="false"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <application
         android:allowBackup="true"
@@ -17,18 +12,40 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.GoProx">
+        android:theme="@style/Theme.GoProx"
+        android:requestLegacyExternalStorage="true">
 
-        <activity android:name=".HomeActivity" android:exported="true"/>
-        <activity android:name=".RegistrationActivity" android:exported="true"/>
-        <activity android:name=".LoginActivity" android:exported="true"/>
-        <activity android:name=".MainActivity" android:exported="true">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- All activities -->
+        <activity android:name=".SplashActivity" android:exported="true" android:theme="@style/Theme.GoProx">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
+        <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".RegistrationActivity" android:exported="false" />
+        <activity android:name=".LoginActivity" android:exported="false" />
+        <activity android:name=".VerifyEmailActivity" android:exported="false" />
+        <activity android:name=".ResetPasswordActivity" android:exported="false" />
+        <activity android:name=".HomeActivity" android:exported="false" />
+        <activity android:name=".ServiceDetailActivity" android:exported="false" />
+        <activity android:name=".ProfileActivity" android:exported="false" />
+        <activity android:name=".AIDialogActivity" android:windowSoftInputMode="adjustResize" android:exported="false" />
+        <activity android:name=".NotFoundActivity" android:exported="false" />
+        <activity android:name=".AddPostActivity" android:exported="false" />
+        <activity android:name=".ChatListActivity" android:exported="false" />
+        <activity android:name=".ChatActivity" android:windowSoftInputMode="adjustResize" android:exported="false" />
+        <activity android:name=".FullscreenImageActivity" android:exported="false" />
     </application>
 
 </manifest>

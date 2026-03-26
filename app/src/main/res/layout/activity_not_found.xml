@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="@android:color/white">
+
+    <TextView
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:text="🔍"
+        android:textSize="64sp"
+        android:gravity="center"
+        android:background="#F5F5F5"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Professional Not Found"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"/>
+
+    <TextView
+        android:id="@+id/tvProblem"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Problem: ..."
+        android:textSize="16sp"
+        android:textColor="#666666"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:id="@+id/tvProfession"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Needed: ..."
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#F44336"
+        android:layout_marginBottom="32dp"/>
+
+    <Button
+        android:id="@+id/btnBrowseAll"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Browse All Services"
+        android:textColor="@android:color/white"
+        android:backgroundTint="#4CAF50"/>
+
+    <Button
+        android:id="@+id/btnGoBack"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Go Back"
+        android:textColor="#666666"
+        android:backgroundTint="#F0F0F0"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

@@ -1,6 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">GoProx</string>
-    <string name="Login">Login</string>
-    <string name="Registration">Registration</string>
-    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID_HERE</string>
+
+    <!-- Common -->
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="loading">Loading...</string>
+
+    <!-- Register -->
+    <string name="register_title">Register to GoProx</string>
+    <string name="google_sign_in">Continue with Google</string>
+    <string name="register_with_email">Register with Email</string>
+    <string name="already_have_account">Already have an account? Login</string>
+    <string name="enter_email">Enter email</string>
+    <string name="enter_password">Enter password</string>
+    <string name="password_min_length">Password must be at least 6 characters</string>
+    <string name="passwords_not_match">Passwords do not match</string>
+    <string name="email_exists">This email is already registered</string>
+    <string name="google_email_exists">This email is registered with Google. Please sign in with Google.</string>
+    <string name="registration_failed">Registration failed</string>
+    <string name="verification_email_sent">Verification email sent</string>
+
+    <!-- Login -->
+    <string name="login_title">Login to GoProx</string>
+    <string name="login_with_email">Login with Email</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="no_account">Don\'t have an account? Register</string>
+    <string name="wrong_password">Wrong password</string>
+    <string name="user_not_found">User not found</string>
+    <string name="verify_email_first">Please verify your email first</string>
+    <string name="login_failed">Login failed</string>
+
+    <!-- Forgot Password -->
+    <string name="reset_password">Reset Password</string>
+    <string name="reset_password_hint">Enter your email to reset password</string>
+    <string name="send_reset_link">Send Reset Link</string>
+    <string name="reset_link_sent">Password reset link sent to your email</string>
+    <string name="reset_failed">Failed to send reset link</string>
+
+    <!-- Verify Email -->
+    <string name="verify_email_title">Verify Your Email</string>
+    <string name="verification_sent">Verification email sent to</string>
+    <string name="check_spam">Didn\'t receive email? Check spam folder</string>
+    <string name="i_verified">I Verified</string>
+    <string name="resend_email">Resend Email</string>
+    <string name="logout">Logout</string>
+    <string name="checking">Checking...</string>
+    <string name="email_verified">Email verified! Redirecting...</string>
+    <string name="not_verified_yet">Not verified yet. Please check your email.</string>
+
+    <!-- Home -->
+    <string name="search_hint">Search services...</string>
+
+    <!-- Errors -->
+    <string name="error">Error</string>
+    <string name="network_error">Network error. Check your connection.</string>
+    <string name="unknown_error">Something went wrong. Please try again.</string>
 </resources>
