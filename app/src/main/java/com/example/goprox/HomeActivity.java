@@ -2,6 +2,7 @@ package com.example.goprox;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -34,7 +35,6 @@ public class HomeActivity extends AppCompatActivity {
 
     private List<Service> serviceList;
     private List<Service> originalServiceList;
-    private boolean isAIActive = false;
 
     private FirebaseService firebaseService;
 
@@ -57,6 +57,11 @@ public class HomeActivity extends AppCompatActivity {
         setupSearch();
         setupBottomNavigation();
         setupItemClickListener();
+
+        String filterProfession = getIntent().getStringExtra("profession_filter");
+        if (filterProfession != null && !filterProfession.isEmpty()) {
+            filterByProfession(filterProfession);
+        }
     }
 
     private void initViews() {
@@ -84,12 +89,59 @@ public class HomeActivity extends AppCompatActivity {
         firebaseService.getAllServices(services -> {
             serviceList.clear();
             serviceList.addAll(services);
-            // ✅ Sort by rating descending (highest first)
-            Collections.sort(serviceList, (a, b) -> Float.compare(b.getRating(), a.getRating()));
             originalServiceList.clear();
-            originalServiceList.addAll(serviceList);
+            originalServiceList.addAll(services);
+            Collections.sort(serviceList, (a, b) -> Float.compare(b.getRating(), a.getRating()));
             serviceAdapter.notifyDataSetChanged();
         });
+    }
+
+    // Search by profession, tags, and description
+    private void filterByProfession(String query) {
+        new Handler().postDelayed(() -> {
+            List<Service> filtered = new ArrayList<>();
+            String lowerQuery = query.toLowerCase();
+
+            for (Service s : originalServiceList) {
+                // Check profession
+                if (s.getProfession().toLowerCase().contains(lowerQuery)) {
+                    filtered.add(s);
+                    continue;
+                }
+
+                // Check tags
+                boolean tagMatch = false;
+                if (s.getTags() != null) {
+                    for (String tag : s.getTags()) {
+                        if (tag.toLowerCase().contains(lowerQuery) ||
+                                lowerQuery.contains(tag.toLowerCase())) {
+                            tagMatch = true;
+                            break;
+                        }
+                    }
+                }
+                if (tagMatch) {
+                    filtered.add(s);
+                    continue;
+                }
+
+                // Check description
+                if (s.getDescription().toLowerCase().contains(lowerQuery)) {
+                    filtered.add(s);
+                }
+            }
+
+            if (filtered.isEmpty() && !lowerQuery.isEmpty()) {
+                Toast.makeText(this, "No professionals found for: " + query, Toast.LENGTH_LONG).show();
+                showResults(new ArrayList<>());
+            } else {
+                Collections.sort(filtered, (a, b) -> Float.compare(b.getRating(), a.getRating()));
+                showResults(filtered);
+                if (!filtered.isEmpty()) {
+                    Toast.makeText(this, "Found " + filtered.size() + " matching professionals", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }, 500);
     }
 
     private void setupAIToggle() {
@@ -123,13 +175,15 @@ public class HomeActivity extends AppCompatActivity {
                 }
             }
         }
-        // ✅ Update adapter with filtered list
-        serviceAdapter.updateList(filtered);
-        // ✅ Update main serviceList for click listener
+        showResults(filtered);
+    }
+
+    private void showResults(List<Service> results) {
+        Collections.sort(results, (a, b) -> Float.compare(b.getRating(), a.getRating()));
+        serviceAdapter.updateList(results);
         serviceList.clear();
-        serviceList.addAll(filtered);
-        // ✅ Show/hide "Not Found"
-        if (filtered.isEmpty()) {
+        serviceList.addAll(results);
+        if (results.isEmpty()) {
             recyclerView.setVisibility(View.GONE);
             llNotFound.setVisibility(View.VISIBLE);
         } else {
@@ -142,7 +196,6 @@ public class HomeActivity extends AppCompatActivity {
         bottomNavigationView.setOnNavigationItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.nav_home) {
-                Toast.makeText(this, "Home", Toast.LENGTH_SHORT).show();
                 return true;
             } else if (id == R.id.nav_chats) {
                 startActivity(new Intent(this, ChatListActivity.class));
@@ -163,12 +216,15 @@ public class HomeActivity extends AppCompatActivity {
         serviceAdapter.setOnItemClickListener(position -> {
             Service s = serviceList.get(position);
             Intent i = new Intent(this, ServiceDetailActivity.class);
+            i.putExtra("serviceId", s.getServiceId());
             i.putExtra("name", s.getName());
             i.putExtra("profession", s.getProfession());
             i.putExtra("description", s.getDescription());
             i.putExtra("price", s.getPrice());
             i.putExtra("rating", s.getRating());
+            i.putExtra("ratingCount", s.getRatingCount());
             i.putExtra("imageResId", s.getImageResId());
+            i.putExtra("imageUrl", s.getImageUrl());
             i.putExtra("userId", s.getUserId());
             startActivity(i);
         });

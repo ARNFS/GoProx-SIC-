@@ -1,108 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
-    android:fitsSystemWindows="true">
+    android:orientation="vertical">
 
-    <!-- Toolbar (Վերևում) -->
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/white"
-        android:layout_alignParentTop="true"
-        app:titleTextColor="@android:color/black"
-        app:navigationIcon="@drawable/ic_back"/>
+    <include layout="@layout/toolbar" />
 
-    <!-- Bottom Buttons (Ներքևում) -->
-    <LinearLayout
-        android:id="@+id/bottomButtons"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        android:paddingBottom="32dp"
-        android:background="#F5F5F5"
-        android:elevation="4dp">
-
-        <Button
-            android:id="@+id/btnContact"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="Call"
-            android:textColor="@android:color/white"
-            android:backgroundTint="#2196F3"
-            android:layout_marginEnd="8dp"/>
-
-        <Button
-            android:id="@+id/btnMessage"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="Message"
-            android:textColor="@android:color/white"
-            android:backgroundTint="#4CAF50"
-            android:layout_marginStart="8dp"/>
-    </LinearLayout>
-
-    <!-- ScrollView (Տուլբարի տակ, buttons-ից վերև) -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/toolbar"
-        android:layout_above="@id/bottomButtons"
-        android:layout_marginBottom="8dp"
-        android:fillViewport="true">
+        android:padding="16dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="vertical">
 
-            <!-- Profile Image -->
             <ImageView
                 android:id="@+id/ivDetailProfile"
-                android:layout_width="200dp"
-                android:layout_height="200dp"
-                android:src="@drawable/ic_profile_placeholder"
+                android:layout_width="match_parent"
+                android:layout_height="250dp"
                 android:scaleType="centerCrop"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="24dp"/>
-
-            <!-- Name (կենտրոնացված) -->
-            <TextView
-                android:id="@+id/tvDetailName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Name"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:gravity="center_horizontal"
-                android:layout_marginBottom="8dp"/>
-
-            <!-- Profession -->
-            <TextView
-                android:id="@+id/tvDetailProfession"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Profession"
-                android:textSize="18sp"
-                android:textColor="#2196F3"
-                android:gravity="center_horizontal"
+                android:src="@drawable/ic_profile_placeholder"
                 android:layout_marginBottom="16dp"/>
 
-            <!-- Rating -->
+            <TextView
+                android:id="@+id/tvDetailName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tvDetailProfession"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="18sp"
+                android:textColor="@android:color/darker_gray"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tvDetailDescription"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="16sp"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tvDetailPrice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/holo_green_dark"
+                android:layout_marginBottom="8dp"/>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center"
+                android:gravity="center_vertical"
                 android:layout_marginBottom="16dp">
 
                 <RatingBar
@@ -111,56 +70,96 @@
                     android:layout_height="wrap_content"
                     android:numStars="5"
                     android:stepSize="0.1"
-                    android:rating="4.5"
                     android:isIndicator="true"
-                    style="@style/Widget.AppCompat.RatingBar.Small"/>
+                    android:rating="0"/>
 
                 <TextView
                     android:id="@+id/tvDetailRatingText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="4.5"
-                    android:textSize="16sp"
-                    android:textColor="#666666"
+                    android:layout_marginStart="8dp"
+                    android:text="0"/>
+
+                <TextView
+                    android:id="@+id/tvRatingCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="(0 reviews)"
+                    android:textColor="@android:color/darker_gray"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="24dp">
+
+                <Button
+                    android:id="@+id/btnContact"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Contact"
+                    android:layout_marginEnd="8dp"/>
+
+                <Button
+                    android:id="@+id/btnMessage"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Message"
                     android:layout_marginStart="8dp"/>
             </LinearLayout>
 
-            <!-- Price -->
-            <TextView
-                android:id="@+id/tvDetailPrice"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="$50/hour"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="#4CAF50"
-                android:gravity="center_horizontal"
-                android:layout_marginBottom="16dp"/>
-
-            <!-- Description Label -->
+            <!-- Rating and Review Section -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="About"
+                android:text="Rate this professional"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:gravity="center_horizontal"
                 android:layout_marginBottom="8dp"/>
 
-            <!-- Description -->
-            <TextView
-                android:id="@+id/tvDetailDescription"
+            <RatingBar
+                android:id="@+id/ratingBarUser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:numStars="5"
+                android:stepSize="0.5"
+                android:layout_marginBottom="12dp"/>
+
+            <EditText
+                android:id="@+id/etReview"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Description"
-                android:textSize="16sp"
-                android:textColor="#666666"
-                android:gravity="center_horizontal"
-                android:lineSpacingExtra="4dp"
+                android:hint="Write your review (optional)"
+                android:minLines="2"
+                android:maxLines="4"
+                android:padding="12dp"
+                android:layout_marginBottom="8dp"/>
+
+            <Button
+                android:id="@+id/btnSubmitReview"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Submit Review"
                 android:layout_marginBottom="24dp"/>
+
+            <!-- Reviews List -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Reviews"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewReviews"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
 
         </LinearLayout>
     </ScrollView>
-
-</RelativeLayout>
+</LinearLayout>

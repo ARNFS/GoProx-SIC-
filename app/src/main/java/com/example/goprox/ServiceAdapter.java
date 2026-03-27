@@ -11,6 +11,8 @@ import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
+
 import java.util.List;
 
 public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHolder> {
@@ -42,7 +44,16 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Service service = serviceList.get(position);
 
-        holder.ivProfile.setImageResource(service.getImageResId());
+        // Load image using Glide (remote URL if exists, else fallback)
+        if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
+            Glide.with(holder.itemView.getContext())
+                    .load(service.getImageUrl())
+                    .placeholder(service.getImageResId())
+                    .into(holder.ivProfile);
+        } else {
+            holder.ivProfile.setImageResource(service.getImageResId());
+        }
+
         holder.tvName.setText(service.getName());
         holder.tvProfession.setText(service.getProfession());
         holder.tvDescription.setText(service.getDescription());

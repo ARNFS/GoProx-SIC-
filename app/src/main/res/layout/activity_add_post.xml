@@ -4,74 +4,106 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/white">
+    android:padding="16dp">
 
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/white"
-        app:titleTextColor="@android:color/black"
-        app:navigationIcon="@drawable/ic_back"/>
+    <include layout="@layout/toolbar" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="16dp">
+        android:layout_weight="1">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <EditText
-                android:id="@+id/etName"
+            <ImageView
+                android:id="@+id/ivServiceImage"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
+                android:layout_height="200dp"
+                android:scaleType="centerCrop"
+                android:background="#EEEEEE"
+                android:src="@drawable/ic_image_placeholder"
+                android:layout_marginBottom="16dp"/>
+
+            <Button
+                android:id="@+id/btnSelectImage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Select Image"
+                android:layout_marginBottom="16dp"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:hint="Name"
-                android:padding="12dp"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/edittext_bg"/>
+                app:counterEnabled="true"
+                app:counterMaxLength="50"
+                android:layout_marginBottom="16dp">
 
-            <EditText
-                android:id="@+id/etProfession"
+                <EditText
+                    android:id="@+id/etName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:maxLines="1"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
+                android:layout_height="wrap_content"
                 android:hint="Profession"
-                android:padding="12dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/edittext_bg"/>
+                app:counterEnabled="true"
+                app:counterMaxLength="50"
+                android:layout_marginBottom="16dp">
 
-            <EditText
-                android:id="@+id/etDescription"
+                <EditText
+                    android:id="@+id/etProfession"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Description"
-                android:padding="12dp"
-                android:layout_marginTop="12dp"
-                android:minLines="3"
-                android:background="@drawable/edittext_bg"/>
+                app:counterEnabled="true"
+                app:counterMaxLength="200"
+                android:layout_marginBottom="16dp">
 
-            <EditText
-                android:id="@+id/etPrice"
+                <EditText
+                    android:id="@+id/etDescription"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:maxLines="3"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:hint="Price ($/hour)"
-                android:padding="12dp"
-                android:layout_marginTop="12dp"
-                android:inputType="text"
-                android:background="@drawable/edittext_bg"/>
+                android:layout_height="wrap_content"
+                android:hint="Price (e.g., 3)"
+                app:counterEnabled="true"
+                app:counterMaxLength="3"
+                android:layout_marginBottom="16dp">
+
+                <EditText
+                    android:id="@+id/etPrice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLines="1"/>
+            </com.google.android.material.textfield.TextInputLayout>
 
             <Button
                 android:id="@+id/btnSubmit"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
+                android:layout_height="wrap_content"
                 android:text="Add Service"
-                android:textColor="@android:color/white"
-                android:backgroundTint="@color/green"
-                android:layout_marginTop="24dp"/>
-
+                android:layout_marginTop="16dp"/>
         </LinearLayout>
     </ScrollView>
 
@@ -80,8 +112,5 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:menu="@menu/bottom_navigation_menu"
-        app:itemIconTint="@color/bottom_nav_selector"
-        app:itemTextColor="@color/bottom_nav_selector"
-        android:background="@color/white"/>
-
+        android:background="?android:attr/windowBackground"/>
 </LinearLayout>
