@@ -35,7 +35,7 @@ public class AIDialogActivity extends AppCompatActivity {
     private ScrollView scrollView;
 
     // ✅ MOVED API KEY (you should move this to BuildConfig for security)
-    private static final String API_KEY = "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";
+    private static final String API_KEY = BuildConfig.GROQ_API_KEY;
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
     private OkHttpClient client = new OkHttpClient();

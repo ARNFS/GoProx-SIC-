@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
@@ -14,6 +17,10 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 🔥 API Key-ը local.properties-ից
+        val groqApiKey = getLocalProperty("GROQ_API_KEY")
+        buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
     }
 
     buildTypes {
@@ -32,11 +39,21 @@ android {
     }
 }
 
+// 🔥 local.properties-ից արժեք կարդալու ֆունկցիա
+fun getLocalProperty(key: String): String {
+    val properties = Properties()
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        properties.load(FileInputStream(localPropsFile))
+    }
+    return properties.getProperty(key, "")
+}
+
 dependencies {
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
 
-    // Firebase products (versions from BOM)
+    // Firebase products
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-firestore")
@@ -64,22 +81,7 @@ dependencies {
 
     // PhotoView
     implementation("com.github.chrisbanes:PhotoView:2.3.0")
-    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-database")
-    implementation("com.google.firebase:firebase-storage")
 
-    // Glide
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
-
-    // PhotoView (zoomable images)
-    implementation("com.github.chrisbanes:PhotoView:2.3.0")
-
-    // AndroidX
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("com.google.android.material:material:1.13.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
