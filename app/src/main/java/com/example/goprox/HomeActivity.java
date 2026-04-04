@@ -58,9 +58,14 @@ public class HomeActivity extends AppCompatActivity {
         setupBottomNavigation();
         setupItemClickListener();
 
-        String filterProfession = getIntent().getStringExtra("profession_filter");
-        if (filterProfession != null && !filterProfession.isEmpty()) {
-            filterByProfession(filterProfession);
+        ArrayList<String> professionList = getIntent().getStringArrayListExtra("profession_filter_list");
+        if (professionList != null && !professionList.isEmpty()) {
+            filterByMultipleProfessions(professionList);
+        } else {
+            String singleFilter = getIntent().getStringExtra("profession_filter");
+            if (singleFilter != null && !singleFilter.isEmpty()) {
+                filterByProfession(singleFilter);
+            }
         }
     }
 
@@ -92,29 +97,26 @@ public class HomeActivity extends AppCompatActivity {
             originalServiceList.clear();
             originalServiceList.addAll(services);
             Collections.sort(serviceList, (a, b) -> Float.compare(b.getRating(), a.getRating()));
-            serviceAdapter.notifyDataSetChanged();
+            if (serviceAdapter != null) {
+                serviceAdapter.notifyDataSetChanged();
+            }
         });
     }
 
-    // Search by profession, tags, and description
     private void filterByProfession(String query) {
         new Handler().postDelayed(() -> {
             List<Service> filtered = new ArrayList<>();
             String lowerQuery = query.toLowerCase();
 
             for (Service s : originalServiceList) {
-                // Check profession
                 if (s.getProfession().toLowerCase().contains(lowerQuery)) {
                     filtered.add(s);
                     continue;
                 }
-
-                // Check tags
                 boolean tagMatch = false;
                 if (s.getTags() != null) {
                     for (String tag : s.getTags()) {
-                        if (tag.toLowerCase().contains(lowerQuery) ||
-                                lowerQuery.contains(tag.toLowerCase())) {
+                        if (tag.toLowerCase().contains(lowerQuery) || lowerQuery.contains(tag.toLowerCase())) {
                             tagMatch = true;
                             break;
                         }
@@ -124,8 +126,6 @@ public class HomeActivity extends AppCompatActivity {
                     filtered.add(s);
                     continue;
                 }
-
-                // Check description
                 if (s.getDescription().toLowerCase().contains(lowerQuery)) {
                     filtered.add(s);
                 }
@@ -140,6 +140,36 @@ public class HomeActivity extends AppCompatActivity {
                 if (!filtered.isEmpty()) {
                     Toast.makeText(this, "Found " + filtered.size() + " matching professionals", Toast.LENGTH_SHORT).show();
                 }
+            }
+        }, 500);
+    }
+
+    private void filterByMultipleProfessions(ArrayList<String> professions) {
+        if (professions == null || professions.isEmpty()) return;
+
+        new Handler().postDelayed(() -> {
+            List<Service> filtered = new ArrayList<>();
+            for (Service s : originalServiceList) {
+                String profLower = s.getProfession().toLowerCase();
+                boolean match = false;
+                for (String p : professions) {
+                    if (profLower.contains(p.toLowerCase())) {
+                        match = true;
+                        break;
+                    }
+                }
+                if (match) {
+                    filtered.add(s);
+                }
+            }
+
+            if (filtered.isEmpty()) {
+                Toast.makeText(this, "No professionals found for the requested types.", Toast.LENGTH_LONG).show();
+                showResults(new ArrayList<>());
+            } else {
+                Collections.sort(filtered, (a, b) -> Float.compare(b.getRating(), a.getRating()));
+                showResults(filtered);
+                Toast.makeText(this, "Found " + filtered.size() + " matching professionals", Toast.LENGTH_SHORT).show();
             }
         }, 500);
     }

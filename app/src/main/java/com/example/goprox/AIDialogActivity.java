@@ -4,11 +4,13 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -17,7 +19,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -34,12 +38,23 @@ public class AIDialogActivity extends AppCompatActivity {
     private LinearLayout llChatContainer;
     private ScrollView scrollView;
 
-    // ✅ MOVED API KEY (you should move this to BuildConfig for security)
-    private static final String API_KEY = BuildConfig.GROQ_API_KEY;
+    private static final String API_KEY = "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";
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-    private OkHttpClient client = new OkHttpClient();
+    private OkHttpClient client;
     private FirebaseService firebaseService;
+
+    private long lastRequestTime = 0;
+    private static final long MIN_INTERVAL = 1000;
+
+    private boolean canMakeRequest() {
+        long now = System.currentTimeMillis();
+        if (now - lastRequestTime >= MIN_INTERVAL) {
+            lastRequestTime = now;
+            return true;
+        }
+        return false;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,9 +73,15 @@ public class AIDialogActivity extends AppCompatActivity {
             getSupportActionBar().setTitle("AI Assistant");
         }
 
+        client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+
         firebaseService = new FirebaseService();
 
-        addMessage("🔧 AI is ready! Describe your problem in any language.", false);
+        addMessage("🔧 AI is ready. Describe what you need.", false);
 
         btnSend.setOnClickListener(v -> {
             String text = etUserInput.getText().toString().trim();
@@ -79,16 +100,20 @@ public class AIDialogActivity extends AppCompatActivity {
     }
 
     private void analyzeProblem(String problem) {
+        if (!canMakeRequest()) {
+            addMessage("⏳ Please wait 1 second before sending another request.", false);
+            return;
+        }
+
         TextView thinking = new TextView(this);
         thinking.setText("⏳ AI is analyzing...");
-        thinking.setPadding(16, 16, 16, 16);
+        thinking.setPadding(24, 16, 24, 16);
         thinking.setBackgroundResource(R.drawable.bg_ai_message);
-        LinearLayout.LayoutParams thinkingParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        thinkingParams.setMargins(16, 8, 100, 8);
-        thinking.setLayoutParams(thinkingParams);
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(16, 8, 100, 8);
+        thinking.setLayoutParams(params);
         llChatContainer.addView(thinking);
         scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
 
@@ -101,63 +126,29 @@ public class AIDialogActivity extends AppCompatActivity {
                 return;
             }
 
-            // Build professional list with tags and descriptions
-            StringBuilder professionalsList = new StringBuilder();
+            // Build professional list for AI
+            StringBuilder sb = new StringBuilder();
             for (Service s : services) {
-                professionalsList.append("• **")
-                        .append(s.getProfession())
-                        .append("**\n")
-                        .append("  Description: ").append(s.getDescription()).append("\n");
-
+                sb.append("TITLE: ").append(s.getProfession()).append("\n");
+                sb.append("DESCRIPTION: ").append(s.getDescription()).append("\n");
                 if (s.getTags() != null && !s.getTags().isEmpty()) {
-                    professionalsList.append("  Skills/Tags: ")
-                            .append(TextUtils.join(", ", s.getTags()))
-                            .append("\n");
+                    sb.append("TAGS: ").append(TextUtils.join(", ", s.getTags())).append("\n");
                 }
-                professionalsList.append("\n");
+                sb.append("\n");
             }
 
-            // 🔥 ULTRA-DETAILED PROMPT WITH SEMANTIC UNDERSTANDING
-            String prompt =
-                    "================================================================================\n" +
-                            "YOU ARE A HIGHLY INTELLIGENT PROFESSIONAL MATCHMAKER FOR GoProx APP.\n" +
-                            "================================================================================\n\n" +
-                            "Your task: Given a user's request and a list of professionals (each with title, description, and skills/tags), you must choose the SINGLE MOST SUITABLE professional.\n\n" +
-                            "RULES:\n" +
-                            "1. Read the user's request carefully. Understand its MEANING, not just keywords.\n" +
-                            "2. A professional can match even if their title doesn't exactly match, if their DESCRIPTION or TAGS show they can do the work.\n" +
-                            "3. Example: 'PHP Programmer' with description 'making php scripts and servers' and tags 'php, server, backend' should be matched when user says 'I need a server' or 'I need backend work'.\n" +
-                            "4. Example: 'Electrician' with description 'repairing switches, wiring' should be matched when user says 'my lights aren't working' or 'electrical problem'.\n" +
-                            "5. If multiple professionals match, choose the one whose description and tags are most specific and relevant.\n" +
-                            "6. If NO professional's description or tags match the user's request, answer 'NOT_FOUND'.\n" +
-                            "7. Do NOT guess. Do NOT select a professional if their description does not explicitly cover the task.\n" +
-                            "8. Return ONLY the exact profession title as it appears in the list, or 'NOT_FOUND'.\n" +
-                            "9. No explanations, no extra text, no lists.\n\n" +
-                            "================================================================================\n" +
-                            "EXAMPLES OF SEMANTIC MATCHING (read and learn):\n" +
-                            "================================================================================\n\n" +
-                            "User: 'I need a server' | Professional: 'PHP Programmer' (tags: php, server, backend) → MATCH: 'PHP Programmer'\n" +
-                            "User: 'I need a website' | Professional: 'Web Developer' (tags: html, css, javascript) → MATCH: 'Web Developer'\n" +
-                            "User: 'My car won't start' | Professional: 'Auto Mechanic' (tags: car, engine, repair) → MATCH: 'Auto Mechanic'\n" +
-                            "User: 'I want an iPhone app' | Professional: 'iOS Developer' (tags: ios, swift, iphone) → MATCH: 'iOS Developer'\n" +
-                            "User: 'Electrical problem at home' | Professional: 'Electrician' (tags: electrical, wiring) → MATCH: 'Electrician'\n" +
-                            "User: 'Need plumbing repair' | Professional: 'Plumber' (tags: pipe, leak, water) → MATCH: 'Plumber'\n" +
-                            "User: 'I need a cross-platform mobile app' | Professional with tags 'ios, swift' only → NOT_FOUND (no cross-platform expert)\n\n" +
-                            "================================================================================\n" +
-                            "NOW PROCESS THE FOLLOWING USER REQUEST:\n" +
-                            "================================================================================\n\n" +
-                            "User request: \"" + problem + "\"\n\n" +
-                            "Here is the list of available professionals (title + description + skills/tags):\n\n" +
-                            professionalsList.toString() +
-                            "================================================================================\n" +
-                            "YOUR ANSWER (ONLY profession title or NOT_FOUND):\n" +
-                            "Profession:";
+            String prompt = "You are a precise matchmaker.\n\n" +
+                    "USER REQUEST: \"" + problem + "\"\n\n" +
+                    "AVAILABLE PROFESSIONALS:\n" + sb.toString() +
+                    "Return ONLY the TITLE(s) that best match the user's request, separated by commas.\n" +
+                    "If none match, return NOT_FOUND.\n\n" +
+                    "Your answer:";
 
             try {
                 JSONObject json = new JSONObject();
                 json.put("model", "llama-3.3-70b-versatile");
                 json.put("temperature", 0.1);
-                json.put("max_tokens", 50);
+                json.put("max_tokens", 100);
 
                 JSONArray messages = new JSONArray();
                 JSONObject userMsg = new JSONObject();
@@ -166,15 +157,10 @@ public class AIDialogActivity extends AppCompatActivity {
                 messages.put(userMsg);
                 json.put("messages", messages);
 
-                RequestBody body = RequestBody.create(
-                        json.toString(),
-                        MediaType.parse("application/json")
-                );
-
+                RequestBody body = RequestBody.create(json.toString(), MediaType.parse("application/json"));
                 Request request = new Request.Builder()
                         .url(API_URL)
                         .header("Authorization", "Bearer " + API_KEY)
-                        .header("Content-Type", "application/json")
                         .post(body)
                         .build();
 
@@ -194,47 +180,75 @@ public class AIDialogActivity extends AppCompatActivity {
                             llChatContainer.removeView(thinking);
                             try {
                                 if (!response.isSuccessful()) {
-                                    addMessage("❌ API Error " + response.code() + ":\n" + resBody, false);
+                                    addMessage("❌ API error: " + response.code(), false);
                                     return;
                                 }
 
                                 JSONObject obj = new JSONObject(resBody);
-                                String profession = obj.getJSONArray("choices")
+                                String raw = obj.getJSONArray("choices")
                                         .getJSONObject(0)
                                         .getJSONObject("message")
                                         .getString("content")
-                                        .trim()
-                                        .replace("Profession:", "")
-                                        .replace("\"", "")
                                         .trim();
 
-                                // Clean up the response
-                                if (profession.startsWith("**") && profession.endsWith("**")) {
-                                    profession = profession.substring(2, profession.length() - 2);
-                                }
-
-                                addMessage("🔧 **Recommended:** " + profession, false);
-
-                                if (profession.equalsIgnoreCase("NOT_FOUND")) {
-                                    addMessage("I couldn't find a matching professional. Try describing differently.", false);
+                                Log.d("AIDialog", "AI raw: " + raw);
+                                if (raw.isEmpty() || raw.equalsIgnoreCase("NOT_FOUND")) {
+                                    addMessage("😔 No matching professional found.", false);
                                     return;
                                 }
 
-                                // Navigate to Home with filter
+                                String[] parts = raw.split(",");
+                                ArrayList<String> aiTitles = new ArrayList<>();
+                                for (String p : parts) {
+                                    String t = p.trim();
+                                    if (!t.isEmpty()) aiTitles.add(t);
+                                }
+
+                                // Platform filter
+                                String lowerProblem = problem.toLowerCase();
+                                boolean wantIos = lowerProblem.contains("iphone") || lowerProblem.contains("ios") || lowerProblem.contains("apple");
+                                boolean wantAndroid = lowerProblem.contains("android") || lowerProblem.contains("google play");
+
+                                ArrayList<String> finalTitles = new ArrayList<>();
+                                for (String title : aiTitles) {
+                                    Service matched = null;
+                                    for (Service s : services) {
+                                        if (s.getProfession().equalsIgnoreCase(title)) {
+                                            matched = s;
+                                            break;
+                                        }
+                                    }
+                                    if (matched == null) continue;
+
+                                    String fullText = (matched.getProfession() + " " + matched.getDescription()).toLowerCase();
+                                    if (matched.getTags() != null) {
+                                        for (String tag : matched.getTags()) fullText += " " + tag.toLowerCase();
+                                    }
+
+                                    boolean keep = true;
+                                    if (wantIos && !(fullText.contains("ios") || fullText.contains("iphone") || fullText.contains("swift"))) keep = false;
+                                    if (wantAndroid && !(fullText.contains("android") || fullText.contains("java") || fullText.contains("kotlin"))) keep = false;
+                                    if (keep) finalTitles.add(title);
+                                }
+
+                                if (finalTitles.isEmpty()) {
+                                    addMessage("😔 No matching professional found after filtering.", false);
+                                    return;
+                                }
+
+                                addMessage("✅ Found: " + TextUtils.join(", ", finalTitles), false);
                                 Intent intent = new Intent(AIDialogActivity.this, HomeActivity.class);
-                                intent.putExtra("profession_filter", profession);
+                                intent.putStringArrayListExtra("profession_filter_list", finalTitles);
                                 intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                                 startActivity(intent);
                                 finish();
 
                             } catch (Exception e) {
-                                addMessage("❌ Error parsing:\n" + resBody, false);
-                                e.printStackTrace();
+                                addMessage("❌ Error: " + e.getMessage(), false);
                             }
                         });
                     }
                 });
-
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     llChatContainer.removeView(thinking);
@@ -254,12 +268,11 @@ public class AIDialogActivity extends AppCompatActivity {
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
+                LinearLayout.LayoutParams.WRAP_CONTENT);
         params.setMargins(isUser ? 100 : 16, 8, isUser ? 16 : 100, 8);
         params.gravity = isUser ? android.view.Gravity.END : android.view.Gravity.START;
         tv.setLayoutParams(params);
-        tv.setMaxWidth(800);
+        tv.setMaxWidth(900);
         llChatContainer.addView(tv);
         scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
     }

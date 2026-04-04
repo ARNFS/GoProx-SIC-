@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">jit.si</domain>
+        <domain includeSubdomains="true">meet.jit.si</domain>
+        <domain includeSubdomains="true">jitsi.riot.im</domain>
+        <domain includeSubdomains="true">meet.ffmuc.net</domain>
+    </domain-config>
+    <!-- Թույլատրել բոլոր դոմենները debug-ի համար (ժամանակավոր) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -15,7 +15,6 @@ public class Service {
     private String userId;
     private List<String> tags;
 
-    // Full constructor
     public Service(String serviceId, String name, String profession, String description,
                    String price, float rating, int ratingCount, int imageResId,
                    String userId, List<String> tags, String imageUrl) {
@@ -32,14 +31,12 @@ public class Service {
         this.imageUrl = imageUrl;
     }
 
-    // Constructor without serviceId (for creating new services)
     public Service(String name, String profession, String description,
                    String price, float rating, int ratingCount, int imageResId,
                    String userId, List<String> tags, String imageUrl) {
         this(null, name, profession, description, price, rating, ratingCount, imageResId, userId, tags, imageUrl);
     }
 
-    // Getters
     public String getServiceId() { return serviceId; }
     public String getName() { return name; }
     public String getProfession() { return profession; }
@@ -52,7 +49,6 @@ public class Service {
     public String getUserId() { return userId; }
     public List<String> getTags() { return tags; }
 
-    // Setters
     public void setServiceId(String serviceId) { this.serviceId = serviceId; }
     public void setRating(float rating) { this.rating = rating; }
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }

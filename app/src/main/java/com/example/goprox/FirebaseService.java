@@ -59,12 +59,10 @@ public class FirebaseService {
                 });
     }
 
-    // Alias method for AI dialog
     public void getAllServicesWithTags(ServiceCallback callback) {
         getAllServices(callback);
     }
 
-    // Get single service by ID
     public void getServiceById(String serviceId, ServiceCallback callback) {
         db.collection("services").document(serviceId)
                 .get()
@@ -104,7 +102,6 @@ public class FirebaseService {
                 });
     }
 
-    // Delete service
     public void deleteService(String serviceId, OnDeleteListener listener) {
         db.collection("services").document(serviceId)
                 .delete()
@@ -116,7 +113,6 @@ public class FirebaseService {
                 });
     }
 
-    // Delete all services (for testing)
     public void deleteAllServices(OnDeleteListener listener) {
         db.collection("services")
                 .get()
@@ -132,7 +128,6 @@ public class FirebaseService {
                 });
     }
 
-    // Delete services by user ID (current user's services)
     public void deleteMyServices(OnDeleteListener listener) {
         String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser().getUid();
         db.collection("services")
@@ -149,8 +144,7 @@ public class FirebaseService {
                     }
                 });
     }
-//s
-    // Listener interface for delete operations
+
     public interface OnDeleteListener {
         void onSuccess();
         void onFailure(String error);

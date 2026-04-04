@@ -44,7 +44,6 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Service service = serviceList.get(position);
 
-        // Load image using Glide (remote URL if exists, else fallback)
         if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
             Glide.with(holder.itemView.getContext())
                     .load(service.getImageUrl())

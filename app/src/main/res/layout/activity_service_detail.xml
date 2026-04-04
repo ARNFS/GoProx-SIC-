@@ -8,15 +8,19 @@
     <include layout="@layout/toolbar" />
 
     <ScrollView
+        android:id="@+id/scrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="16dp">
+        android:fillViewport="true"
+        android:scrollbars="vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="16dp">
 
+            <!-- Image -->
             <ImageView
                 android:id="@+id/ivDetailProfile"
                 android:layout_width="match_parent"
@@ -25,6 +29,7 @@
                 android:src="@drawable/ic_profile_placeholder"
                 android:layout_marginBottom="16dp"/>
 
+            <!-- Name -->
             <TextView
                 android:id="@+id/tvDetailName"
                 android:layout_width="wrap_content"
@@ -33,6 +38,7 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- Profession -->
             <TextView
                 android:id="@+id/tvDetailProfession"
                 android:layout_width="wrap_content"
@@ -41,6 +47,7 @@
                 android:textColor="@android:color/darker_gray"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- Description -->
             <TextView
                 android:id="@+id/tvDetailDescription"
                 android:layout_width="wrap_content"
@@ -48,6 +55,7 @@
                 android:textSize="16sp"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- Price -->
             <TextView
                 android:id="@+id/tvDetailPrice"
                 android:layout_width="wrap_content"
@@ -57,6 +65,7 @@
                 android:textColor="@android:color/holo_green_dark"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- Rating (display only) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -89,6 +98,7 @@
                     android:textColor="@android:color/darker_gray"/>
             </LinearLayout>
 
+            <!-- Buttons -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -100,7 +110,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Contact"
+                    android:text="Call"
                     android:layout_marginEnd="8dp"/>
 
                 <Button
@@ -112,7 +122,7 @@
                     android:layout_marginStart="8dp"/>
             </LinearLayout>
 
-            <!-- Rating and Review Section -->
+            <!-- Rate this professional -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -129,6 +139,7 @@
                 android:stepSize="0.5"
                 android:layout_marginBottom="12dp"/>
 
+            <!-- Review EditText -->
             <EditText
                 android:id="@+id/etReview"
                 android:layout_width="match_parent"
@@ -137,8 +148,11 @@
                 android:minLines="2"
                 android:maxLines="4"
                 android:padding="12dp"
+                android:inputType="textMultiLine"
+                android:imeOptions="actionDone"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- Submit Review Button -->
             <Button
                 android:id="@+id/btnSubmitReview"
                 android:layout_width="wrap_content"
@@ -146,7 +160,7 @@
                 android:text="Submit Review"
                 android:layout_marginBottom="24dp"/>
 
-            <!-- Reviews List -->
+            <!-- Reviews List Title -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -155,10 +169,12 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- RecyclerView for reviews -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerViewReviews"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"/>
 
         </LinearLayout>
     </ScrollView>

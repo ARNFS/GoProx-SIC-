@@ -44,7 +44,10 @@ import java.util.UUID;
 public class ChatActivity extends AppCompatActivity {
 
     private EditText etMessage;
-    private ImageView btnSend, btnAttach, btnVoiceCall, btnVideoCall;
+    private ImageView btnSend;
+    private ImageView btnAttach;
+    private ImageView btnVoiceCall;
+    private ImageView btnVideoCall;
     private LinearLayout llMessages;
     private ScrollView scrollView;
 
@@ -94,15 +97,15 @@ public class ChatActivity extends AppCompatActivity {
         chatMetaRef = FirebaseDatabase.getInstance().getReference("chats").child(chatId);
         storageRef = FirebaseStorage.getInstance().getReference();
 
-        // Ensure chat metadata exists
         updateChatMetadata("Chat started");
-
         loadMessages();
 
         btnSend.setOnClickListener(v -> sendMessage());
-        btnAttach.setOnClickListener(v -> requestStoragePermission());
-        btnVoiceCall.setOnClickListener(v -> startVoiceCall());
-        btnVideoCall.setOnClickListener(v -> startVideoCall());
+
+        // ✅ Null checks for buttons
+        if (btnAttach != null) btnAttach.setOnClickListener(v -> requestStoragePermission());
+        if (btnVoiceCall != null) btnVoiceCall.setOnClickListener(v -> startVoiceCall());
+        if (btnVideoCall != null) btnVideoCall.setOnClickListener(v -> startVideoCall());
 
         etMessage.setOnFocusChangeListener((v, hasFocus) -> {
             if (hasFocus) {
@@ -134,8 +137,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_STORAGE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -158,8 +160,6 @@ public class ChatActivity extends AppCompatActivity {
         } else if (requestCode == PICK_FILE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri fileUri = data.getData();
             uploadFile(fileUri);
-        } else {
-            Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -189,12 +189,9 @@ public class ChatActivity extends AppCompatActivity {
                 BitmapFactory.decodeStream(inputStream, null, options);
                 inputStream.close();
 
-                int imageWidth = options.outWidth;
-                int imageHeight = options.outHeight;
-
                 int maxSize = 1600;
                 int sampleSize = 1;
-                while (imageWidth / sampleSize > maxSize || imageHeight / sampleSize > maxSize) {
+                while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
                     sampleSize *= 2;
                 }
                 options.inSampleSize = sampleSize;
@@ -212,13 +209,9 @@ public class ChatActivity extends AppCompatActivity {
                         .addOnSuccessListener(taskSnapshot -> {
                             fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
                                 sendFileMessage(uri.toString(), fileName, mimeType, true);
-                            }).addOnFailureListener(e -> {
-                                Toast.makeText(this, "Failed to get URL: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                            });
+                            }).addOnFailureListener(e -> Toast.makeText(ChatActivity.this, "Failed to get URL: " + e.getMessage(), Toast.LENGTH_LONG).show());
                         })
-                        .addOnFailureListener(e -> {
-                            Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
+                        .addOnFailureListener(e -> Toast.makeText(ChatActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
             } catch (Exception e) {
                 Toast.makeText(this, "Image processing error: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
@@ -227,23 +220,17 @@ public class ChatActivity extends AppCompatActivity {
                     .addOnSuccessListener(taskSnapshot -> {
                         fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
                             sendFileMessage(uri.toString(), fileName, mimeType, false);
-                        }).addOnFailureListener(e -> {
-                            Toast.makeText(this, "Failed to get URL: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
+                        }).addOnFailureListener(e -> Toast.makeText(ChatActivity.this, "Failed to get URL: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
+                    .addOnFailureListener(e -> Toast.makeText(ChatActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
         }
     }
 
     private void sendFileMessage(String fileUrl, String fileName, String mimeType, boolean isImage) {
         String timestamp = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
         String messageId = chatRef.push().getKey();
-
         String type = isImage ? "image" : "file";
         String displayText = isImage ? "📷 Image" : "📎 " + fileName;
-
         Message message = new Message(userId, displayText, timestamp, type, fileUrl, mimeType, fileName);
         chatRef.child(messageId).setValue(message)
                 .addOnSuccessListener(aVoid -> {
@@ -258,10 +245,8 @@ public class ChatActivity extends AppCompatActivity {
             Toast.makeText(this, "Enter a message", Toast.LENGTH_SHORT).show();
             return;
         }
-
         String timestamp = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
         String messageId = chatRef.push().getKey();
-
         Message message = new Message(userId, text, timestamp, "text", null, null, null);
         chatRef.child(messageId).setValue(message)
                 .addOnSuccessListener(aVoid -> {
@@ -279,15 +264,11 @@ public class ChatActivity extends AppCompatActivity {
         chatMetaRef.updateChildren(updates);
     }
 
-    // ✅ Voice Call – opens system dialer with contact suggestion
     private void startVoiceCall() {
         Intent intent = new Intent(Intent.ACTION_DIAL);
-        // You can set contact number if available
-        // intent.setData(Uri.parse("tel:" + otherUserPhone));
         startActivity(Intent.createChooser(intent, "Call " + otherUserName + " with"));
     }
 
-    // ✅ Video Call – opens system chooser
     private void startVideoCall() {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setData(Uri.parse("https://meet.google.com/new"));
@@ -320,47 +301,39 @@ public class ChatActivity extends AppCompatActivity {
             Glide.with(this).load(message.getFileUrl()).into(imageView);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-            );
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
             params.setMargins(8, 8, 8, 8);
             imageView.setLayoutParams(params);
             imageView.setMaxHeight(1200);
             imageView.setAdjustViewBounds(true);
             imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-
             imageView.setOnClickListener(v -> {
                 Intent intent = new Intent(ChatActivity.this, FullscreenImageActivity.class);
                 intent.putExtra("image_url", message.getFileUrl());
                 startActivity(intent);
             });
-
             container.addView(imageView);
         } else if ("file".equals(message.getType()) && message.getFileUrl() != null) {
             LinearLayout fileLayout = new LinearLayout(this);
             fileLayout.setOrientation(LinearLayout.HORIZONTAL);
             fileLayout.setPadding(20, 12, 20, 12);
             fileLayout.setBackgroundResource(isMe ? R.drawable.bg_user_message : R.drawable.bg_ai_message);
-
             ImageView icon = new ImageView(this);
             icon.setImageResource(R.drawable.ic_file);
             icon.setLayoutParams(new LinearLayout.LayoutParams(32, 32));
             icon.setPadding(0, 0, 16, 0);
-
             TextView fileName = new TextView(this);
             fileName.setText(message.getText());
             fileName.setTextSize(14);
             fileName.setTextColor(isMe ? 0xFFFFFFFF : 0xFF000000);
-
             fileLayout.addView(icon);
             fileLayout.addView(fileName);
-
             fileLayout.setOnClickListener(v -> {
                 Intent intent = new Intent(Intent.ACTION_VIEW);
                 intent.setDataAndType(Uri.parse(message.getFileUrl()), "*/*");
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(Intent.createChooser(intent, "Open with"));
             });
-
             container.addView(fileLayout);
         } else {
             TextView textTv = new TextView(this);
@@ -402,7 +375,6 @@ public class ChatActivity extends AppCompatActivity {
         public String fileUrl;
         public String mimeType;
         public String fileName;
-
         public Message() {}
         public Message(String userId, String text, String timestamp, String type,
                        String fileUrl, String mimeType, String fileName) {

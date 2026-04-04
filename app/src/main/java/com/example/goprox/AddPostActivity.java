@@ -45,13 +45,11 @@ public class AddPostActivity extends AppCompatActivity {
     private Uri imageUri;
     private static final int PICK_IMAGE_REQUEST = 1;
 
-    // List of forbidden words (profanity, inappropriate)
     private static final List<String> FORBIDDEN_WORDS = Arrays.asList(
             "sex", "porn", "fuck", "shit", "damn", "cock", "dick", "pussy",
             "asshole", "bitch", "whore", "slut", "cunt", "motherfucker"
     );
 
-    // Stop words for tags
     private static final List<String> STOP_WORDS = Arrays.asList(
             "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
             "of", "with", "by", "from", "as", "is", "was", "are", "am", "be",
@@ -85,14 +83,25 @@ public class AddPostActivity extends AppCompatActivity {
         storageRef = storage.getReference();
         userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
-        // Price field: allow only digits
         etPrice.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         etPrice.setFilters(new InputFilter[]{new InputFilter.LengthFilter(3)});
 
-        // Length limits only (no letter restrictions)
-        etName.setFilters(new InputFilter[]{new InputFilter.LengthFilter(50)});
-        etProfession.setFilters(new InputFilter[]{new InputFilter.LengthFilter(50)});
-        etDescription.setFilters(new InputFilter[]{new InputFilter.LengthFilter(200)});
+        InputFilter letterFilter = new InputFilter() {
+            @Override
+            public CharSequence filter(CharSequence source, int start, int end,
+                                       Spanned dest, int dstart, int dend) {
+                for (int i = start; i < end; i++) {
+                    char c = source.charAt(i);
+                    if (!Character.isLetter(c) && !Character.isSpaceChar(c)) {
+                        return "";
+                    }
+                }
+                return null;
+            }
+        };
+        etName.setFilters(new InputFilter[]{letterFilter, new InputFilter.LengthFilter(50)});
+        etProfession.setFilters(new InputFilter[]{letterFilter, new InputFilter.LengthFilter(50)});
+        etDescription.setFilters(new InputFilter[]{letterFilter, new InputFilter.LengthFilter(200)});
 
         btnSelectImage.setOnClickListener(v -> openFileChooser());
         btnSubmit.setOnClickListener(v -> addService());
@@ -122,19 +131,21 @@ public class AddPostActivity extends AppCompatActivity {
         String description = etDescription.getText().toString().trim();
         String priceNumber = etPrice.getText().toString().trim();
 
-        // Validation
         if (name.isEmpty() || profession.isEmpty() || description.isEmpty() || priceNumber.isEmpty()) {
             Toast.makeText(this, "Fill all fields", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Check for profanity
         if (containsForbiddenWord(name) || containsForbiddenWord(profession) || containsForbiddenWord(description)) {
             Toast.makeText(this, "Please avoid inappropriate words", Toast.LENGTH_LONG).show();
             return;
         }
 
-        // Price validation
+        if (!isValidText(name) || !isValidText(profession) || !isValidText(description)) {
+            Toast.makeText(this, "Use only letters and spaces (no numbers/symbols)", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         int priceInt;
         try {
             priceInt = Integer.parseInt(priceNumber);
@@ -146,11 +157,8 @@ public class AddPostActivity extends AppCompatActivity {
             Toast.makeText(this, "Invalid price", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        // ✅ FIXED: No space between number and $/hour
         String priceFormatted = priceInt + "$/hour";
 
-        // Image upload or save without image
         if (imageUri == null) {
             saveServiceToFirestore(name, profession, description, priceFormatted, null);
         } else {
@@ -184,8 +192,9 @@ public class AddPostActivity extends AppCompatActivity {
         service.put("name", name);
         service.put("profession", profession);
         service.put("description", description);
-        service.put("price", priceFormatted);  // ✅ "3$/hour" (no space)
+        service.put("price", priceFormatted);
         service.put("rating", 0.0);
+        service.put("ratingCount", 0);
         service.put("userId", userId);
         service.put("tags", tags);
         service.put("createdAt", System.currentTimeMillis());
@@ -213,6 +222,11 @@ public class AddPostActivity extends AppCompatActivity {
             }
         }
         return false;
+    }
+
+    private boolean isValidText(String text) {
+        Pattern pattern = Pattern.compile("^[a-zA-Z\\s]+$");
+        return pattern.matcher(text).matches();
     }
 
     private List<String> generateTags(String profession, String description) {
