@@ -37,7 +37,7 @@ public class AIDialogActivity extends AppCompatActivity {
     private Button btnSend;
     private LinearLayout llChatContainer;
     private ScrollView scrollView;
-/*c*/
+/*ch*/
     private static final String GROQ_API_KEY = BuildConfig.GROQ_API_KEY;
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
