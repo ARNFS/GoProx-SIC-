@@ -37,8 +37,8 @@ public class AIDialogActivity extends AppCompatActivity {
     private Button btnSend;
     private LinearLayout llChatContainer;
     private ScrollView scrollView;
-
-    private static final String API_KEY = "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";
+/*c*/
+    private static final String GROQ_API_KEY = BuildConfig.GROQ_API_KEY;
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
     private OkHttpClient client;
@@ -160,7 +160,7 @@ public class AIDialogActivity extends AppCompatActivity {
                 RequestBody body = RequestBody.create(json.toString(), MediaType.parse("application/json"));
                 Request request = new Request.Builder()
                         .url(API_URL)
-                        .header("Authorization", "Bearer " + API_KEY)
+                        .header("Authorization", "Bearer " + GROQ_API_KEY)
                         .post(body)
                         .build();
 
