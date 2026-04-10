@@ -14,7 +14,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewViewHolder> {
+public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ViewHolder> {
 
     private List<Review> reviewList;
 
@@ -22,23 +22,32 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         this.reviewList = reviewList;
     }
 
+    public void updateList(List<Review> newList) {
+        this.reviewList = newList;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
-    public ReviewViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_review, parent, false);
-        return new ReviewViewHolder(view);
+        return new ViewHolder(view);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ReviewViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Review review = reviewList.get(position);
         holder.tvUserName.setText(review.getUserName());
-        holder.ratingBar.setRating(review.getRating());
         holder.tvComment.setText(review.getComment());
+        holder.ratingBar.setRating(review.getRating());
 
-        SimpleDateFormat sdf = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
-        holder.tvDate.setText(sdf.format(new Date(review.getTimestamp())));
+        if (review.getTimestamp() > 0) {
+            SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
+            holder.tvDate.setText(sdf.format(new Date(review.getTimestamp())));
+        } else {
+            holder.tvDate.setText("");
+        }
     }
 
     @Override
@@ -46,21 +55,16 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         return reviewList.size();
     }
 
-    public void updateList(List<Review> newList) {
-        this.reviewList = newList;
-        notifyDataSetChanged();
-    }
-
-    static class ReviewViewHolder extends RecyclerView.ViewHolder {
+    static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvUserName, tvComment, tvDate;
         RatingBar ratingBar;
 
-        ReviewViewHolder(@NonNull View itemView) {
+        ViewHolder(View itemView) {
             super(itemView);
-            tvUserName = itemView.findViewById(R.id.tvReviewUserName);
-            ratingBar = itemView.findViewById(R.id.ratingBarReview);
+            tvUserName = itemView.findViewById(R.id.tvReviewUser);
             tvComment = itemView.findViewById(R.id.tvReviewComment);
             tvDate = itemView.findViewById(R.id.tvReviewDate);
+            ratingBar = itemView.findViewById(R.id.ratingBarReview);
         }
     }
 }

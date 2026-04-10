@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_call"
+        android:title="Call"
+        android:icon="@drawable/ic_phone"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_video_call"
+        android:title="Video"
+        android:icon="@drawable/ic_videocam"
+        app:showAsAction="ifRoom" />
+</menu>

@@ -40,6 +40,7 @@ public class FirebaseService {
                             int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
                             float ratingValue = rating != null ? rating.floatValue() : 0f;
 
+                            // Правильный вызов конструктора: 10 аргументов
                             services.add(new Service(
                                     serviceId,
                                     name != null ? name : "Unknown",
@@ -48,10 +49,9 @@ public class FirebaseService {
                                     price != null ? price : "$0",
                                     ratingValue,
                                     ratingCount,
-                                    R.drawable.ic_profile_placeholder,
+                                    imageUrl,                           // ← imageUrl из Firestore
                                     userId != null ? userId : "",
-                                    tags,
-                                    imageUrl
+                                    tags
                             ));
                         }
                     }
@@ -84,6 +84,7 @@ public class FirebaseService {
                         int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
                         float ratingValue = rating != null ? rating.floatValue() : 0f;
 
+                        // Правильный вызов конструктора
                         services.add(new Service(
                                 serviceId,
                                 name != null ? name : "Unknown",
@@ -92,10 +93,9 @@ public class FirebaseService {
                                 price != null ? price : "$0",
                                 ratingValue,
                                 ratingCount,
-                                R.drawable.ic_profile_placeholder,
+                                imageUrl,
                                 userId != null ? userId : "",
-                                tags,
-                                imageUrl
+                                tags
                         ));
                     }
                     callback.onCallback(services);

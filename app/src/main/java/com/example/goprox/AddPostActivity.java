@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-public class AddPostActivity extends AppCompatActivity {
+public class AddPostActivity extends BaseActivity {
 
     private EditText etName, etProfession, etDescription, etPrice;
     private Button btnSubmit, btnSelectImage;

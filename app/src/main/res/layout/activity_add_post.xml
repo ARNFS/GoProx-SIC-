@@ -4,106 +4,94 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@color/white">
 
-    <include layout="@layout/toolbar" />
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/red"
+        app:title="Add Service"
+        app:titleTextColor="@android:color/white"
+        android:elevation="4dp" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="16dp">
 
             <ImageView
                 android:id="@+id/ivServiceImage"
-                android:layout_width="match_parent"
-                android:layout_height="200dp"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_profile_placeholder"
                 android:scaleType="centerCrop"
-                android:background="#EEEEEE"
-                android:src="@drawable/ic_image_placeholder"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" />
 
             <Button
                 android:id="@+id/btnSelectImage"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center"
                 android:text="Select Image"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" />
 
-            <com.google.android.material.textfield.TextInputLayout
+            <EditText
+                android:id="@+id/etName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Name"
-                app:counterEnabled="true"
-                app:counterMaxLength="50"
-                android:layout_marginBottom="16dp">
+                android:inputType="text"
+                android:padding="12dp"
+                android:background="@drawable/bg_message_input"
+                android:layout_marginBottom="12dp" />
 
-                <EditText
-                    android:id="@+id/etName"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="textPersonName"
-                    android:maxLines="1"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
+            <EditText
+                android:id="@+id/etProfession"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Profession"
-                app:counterEnabled="true"
-                app:counterMaxLength="50"
-                android:layout_marginBottom="16dp">
+                android:inputType="text"
+                android:padding="12dp"
+                android:background="@drawable/bg_message_input"
+                android:layout_marginBottom="12dp" />
 
-                <EditText
-                    android:id="@+id/etProfession"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text"
-                    android:maxLines="1"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
+            <EditText
+                android:id="@+id/etDescription"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Description"
-                app:counterEnabled="true"
-                app:counterMaxLength="200"
-                android:layout_marginBottom="16dp">
+                android:inputType="textMultiLine"
+                android:minLines="3"
+                android:padding="12dp"
+                android:background="@drawable/bg_message_input"
+                android:layout_marginBottom="12dp" />
 
-                <EditText
-                    android:id="@+id/etDescription"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="textMultiLine"
-                    android:maxLines="3"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
+            <EditText
+                android:id="@+id/etPrice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Price (e.g., 3)"
-                app:counterEnabled="true"
-                app:counterMaxLength="3"
-                android:layout_marginBottom="16dp">
-
-                <EditText
-                    android:id="@+id/etPrice"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:maxLines="1"/>
-            </com.google.android.material.textfield.TextInputLayout>
+                android:hint="Price ($/hour)"
+                android:inputType="number"
+                android:padding="12dp"
+                android:background="@drawable/bg_message_input"
+                android:layout_marginBottom="24dp" />
 
             <Button
                 android:id="@+id/btnSubmit"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Add Service"
-                android:layout_marginTop="16dp"/>
+                android:backgroundTint="@color/primary" />
+
         </LinearLayout>
     </ScrollView>
 
@@ -111,6 +99,9 @@
         android:id="@+id/bottomNavigation"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:menu="@menu/bottom_navigation_menu"
-        android:background="?android:attr/windowBackground"/>
+        android:layout_gravity="bottom"
+        android:background="@color/white"
+        app:elevation="8dp"
+        app:menu="@menu/bottom_navigation_menu" />
+
 </LinearLayout>

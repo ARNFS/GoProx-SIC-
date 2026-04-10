@@ -4,113 +4,99 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@android:color/white">
+    android:background="@color/white">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/white"
-        app:titleTextColor="@android:color/black"
-        app:navigationIcon="@drawable/ic_back"/>
+        android:background="@color/primary"
+        app:title="Profile"
+        app:titleTextColor="@android:color/white"
+        android:elevation="4dp" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="24dp"
+            android:gravity="center_horizontal">
 
-            <ImageView
-                android:id="@+id/ivProfileImage"
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/ivProfileAvatar"
                 android:layout_width="120dp"
                 android:layout_height="120dp"
-                android:src="@drawable/ic_profile_placeholder"
-                android:scaleType="centerCrop"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="16dp"/>
-
-            <TextView
-                android:id="@+id/tvName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="User Name"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="4dp"/>
-
-            <TextView
-                android:id="@+id/tvEmail"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="user@email.com"
-                android:textSize="16sp"
-                android:textColor="#666666"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="4dp"/>
-
+                android:src="@drawable/ic_person"
+                android:layout_marginBottom="16dp" />
             <TextView
                 android:id="@+id/tvMemberSince"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Member since"
+                android:text="Member since ..."
                 android:textSize="14sp"
-                android:textColor="#9E9E9E"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="24dp"/>
-
-            <Button
-                android:id="@+id/btnEditProfile"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Edit Profile"
-                android:textColor="@android:color/white"
-                android:backgroundTint="#2196F3"
-                android:layout_marginBottom="12dp"/>
-
-            <Button
-                android:id="@+id/btnLogout"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Logout"
-                android:textColor="@android:color/white"
-                android:backgroundTint="#F44336"
-                android:layout_marginBottom="24dp"/>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
-                android:layout_marginBottom="16dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="My Posts"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="12dp"/>
-
-            <TextView
-                android:id="@+id/tvNoPosts"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No posts yet"
-                android:textSize="16sp"
-                android:textColor="#9E9E9E"
-                android:layout_gravity="center_horizontal"
-                android:visibility="gone"/>
+                android:textColor="@color/gray"
+                android:layout_marginTop="4dp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvMyPosts"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false"/>
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvNoPosts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No services yet"
+                android:textSize="14sp"
+                android:textColor="@color/gray"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvProfileName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="User Name"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvProfileEmail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="user@email.com"
+                android:textSize="16sp"
+                android:textColor="@color/dark_gray"
+                android:layout_marginBottom="24dp" />
+
+            <Button
+                android:id="@+id/btnEditProfile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Edit Profile"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/btnMyServices"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="My Services"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/btnLogout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Logout"
+                android:backgroundTint="@color/red" />
 
         </LinearLayout>
     </ScrollView>
@@ -119,9 +105,9 @@
         android:id="@+id/bottomNavigation"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:menu="@menu/bottom_navigation_menu"
-        app:itemIconTint="@color/bottom_nav_selector"
-        app:itemTextColor="@color/bottom_nav_selector"
-        android:background="@color/white"/>
+        android:layout_gravity="bottom"
+        android:background="@color/white"
+        app:elevation="8dp"
+        app:menu="@menu/bottom_navigation_menu" />
 
 </LinearLayout>

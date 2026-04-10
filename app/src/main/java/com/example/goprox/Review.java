@@ -6,6 +6,8 @@ public class Review {
     private String comment;
     private long timestamp;
 
+    public Review() {}
+
     public Review(String userName, float rating, String comment, long timestamp) {
         this.userName = userName;
         this.rating = rating;

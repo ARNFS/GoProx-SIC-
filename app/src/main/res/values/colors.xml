@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Основные -->
+    <color name="primary">#4CAF50</color>
+    <color name="primary_dark">#388E3C</color>
+    <color name="accent">#2196F3</color>
     <color name="green">#4CAF50</color>
     <color name="red">#F44336</color>
-    <color name="blue">#2196F3</color>
-    <color name="yellow">#FFC107</color>
-    <color name="black">#000000</color>
+    <color name="yellow">#ffff4a</color>
+    <color name="blue">#0000FF</color>
+
+    <!-- Градации серого -->
     <color name="white">#FFFFFF</color>
-    <color name="gray">#9E9E9E</color>
-    <color name="light_gray">#F5F5F5</color>
-    <color name="dark_gray">#616161</color>
+    <color name="black">#000000</color>
+    <color name="gray">#888888</color>
+    <color name="dark_gray">#666666</color>
+    <color name="light_gray">#E0E0E0</color>
+
+    <!-- Чат -->
+    <color name="message_me">#DCF8C6</color>
+    <color name="message_other">#FFFFFF</color>
+    <color name="chat_background">#ECE5DD</color>
 </resources>

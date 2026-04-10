@@ -9,6 +9,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
@@ -37,27 +38,45 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_service, parent, false);
-        return new ViewHolder(view, listener);
+        return new ViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Service service = serviceList.get(position);
-
-        if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
-            Glide.with(holder.itemView.getContext())
-                    .load(service.getImageUrl())
-                    .placeholder(service.getImageResId())
-                    .into(holder.ivProfile);
-        } else {
-            holder.ivProfile.setImageResource(service.getImageResId());
-        }
-
         holder.tvName.setText(service.getName());
         holder.tvProfession.setText(service.getProfession());
         holder.tvDescription.setText(service.getDescription());
         holder.tvPrice.setText(service.getPrice());
         holder.ratingBar.setRating(service.getRating());
+
+        // КРАСНЫЙ цвет профессии
+        holder.tvProfession.setTextColor(
+                ContextCompat.getColor(holder.itemView.getContext(), R.color.red)
+        );
+
+        // Синий цвет описания (остаётся)
+        holder.tvDescription.setTextColor(
+                ContextCompat.getColor(holder.itemView.getContext(), R.color.blue)
+        );
+
+        if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
+            Glide.with(holder.itemView.getContext())
+                    .load(service.getImageUrl())
+                    .placeholder(R.drawable.ic_profile_placeholder)
+                    .into(holder.ivProfile);
+        } else {
+            holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+        }
+
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                int pos = holder.getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    listener.onItemClick(pos);
+                }
+            }
+        });
     }
 
     @Override
@@ -66,34 +85,25 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
     }
 
     public void updateList(List<Service> newList) {
-        this.serviceList = newList;
+        serviceList = newList;
         notifyDataSetChanged();
     }
 
-    public static class ViewHolder extends RecyclerView.ViewHolder {
+    static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView ivProfile;
         TextView tvName, tvProfession, tvDescription, tvPrice;
         RatingBar ratingBar;
         CardView cardView;
 
-        public ViewHolder(@NonNull View itemView, OnItemClickListener listener) {
+        ViewHolder(View itemView) {
             super(itemView);
-            ivProfile = itemView.findViewById(R.id.ivProfile);
-            tvName = itemView.findViewById(R.id.tvName);
-            tvProfession = itemView.findViewById(R.id.tvProfession);
-            tvDescription = itemView.findViewById(R.id.tvDescription);
-            tvPrice = itemView.findViewById(R.id.tvPrice);
-            ratingBar = itemView.findViewById(R.id.ratingBar);
-            cardView = itemView.findViewById(R.id.cardView);
-
-            itemView.setOnClickListener(v -> {
-                if (listener != null) {
-                    int position = getAdapterPosition();
-                    if (position != RecyclerView.NO_POSITION) {
-                        listener.onItemClick(position);
-                    }
-                }
-            });
+            ivProfile = itemView.findViewById(R.id.ivServiceImage);
+            tvName = itemView.findViewById(R.id.tvServiceName);
+            tvProfession = itemView.findViewById(R.id.tvServiceProfession);
+            tvDescription = itemView.findViewById(R.id.tvServiceDescription);
+            tvPrice = itemView.findViewById(R.id.tvServicePrice);
+            ratingBar = itemView.findViewById(R.id.ratingBarService);
+            cardView = (CardView) itemView;
         }
     }
 }

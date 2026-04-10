@@ -31,7 +31,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class AIDialogActivity extends AppCompatActivity {
+public class AIDialogActivity extends BaseActivity {
 
     private EditText etUserInput;
     private Button btnSend;

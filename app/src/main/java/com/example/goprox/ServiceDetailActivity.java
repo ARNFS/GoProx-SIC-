@@ -2,7 +2,6 @@ package com.example.goprox;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -18,8 +17,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +26,8 @@ import java.util.Map;
 public class ServiceDetailActivity extends AppCompatActivity {
 
     private ImageView ivProfile;
-    private TextView tvName, tvProfession, tvDescription, tvPrice, tvRatingText, tvRatingCount;
+    private TextView tvName, tvProfession, tvDescription, tvPrice;
+    private TextView tvRatingText, tvRatingCount;
     private RatingBar ratingBar, ratingBarUser;
     private Button btnContact, btnMessage, btnSubmitReview;
     private EditText etReview;
@@ -37,24 +35,22 @@ public class ServiceDetailActivity extends AppCompatActivity {
     private ReviewAdapter reviewAdapter;
 
     private FirebaseFirestore db;
-    private String serviceId;
-    private String otherUserId;
-    private String serviceName;
-    private float currentRating;
-    private int ratingCount;
+    private String serviceId, otherUserId, serviceName, currentUserId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_service_detail);
 
+        db = FirebaseFirestore.getInstance();
+        currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
         initViews();
         setupToolbar();
         loadDataFromIntent();
-        loadReviews();
-        setupRatingListener();
-        setupReviewButton();
         setupButtons();
+        setupReviewButton();
+        loadReviews();
     }
 
     private void initViews() {
@@ -73,7 +69,9 @@ public class ServiceDetailActivity extends AppCompatActivity {
         etReview = findViewById(R.id.etReview);
         recyclerViewReviews = findViewById(R.id.recyclerViewReviews);
 
-        db = FirebaseFirestore.getInstance();
+        ratingBarUser.setStepSize(0.5f);
+        ratingBarUser.setNumStars(5);
+
         recyclerViewReviews.setLayoutManager(new LinearLayoutManager(this));
         reviewAdapter = new ReviewAdapter(new ArrayList<>());
         recyclerViewReviews.setAdapter(reviewAdapter);
@@ -94,43 +92,53 @@ public class ServiceDetailActivity extends AppCompatActivity {
         String description = getIntent().getStringExtra("description");
         String price = getIntent().getStringExtra("price");
         float rating = getIntent().getFloatExtra("rating", 0);
-        int ratingCountInt = getIntent().getIntExtra("ratingCount", 0);
-        int imageResId = getIntent().getIntExtra("imageResId", R.drawable.ic_profile_placeholder);
+        int ratingCount = getIntent().getIntExtra("ratingCount", 0);
         String imageUrl = getIntent().getStringExtra("imageUrl");
         otherUserId = getIntent().getStringExtra("userId");
         serviceName = name;
 
-        currentRating = rating;
-        ratingCount = ratingCountInt;
-
         if (imageUrl != null && !imageUrl.isEmpty()) {
-            Glide.with(this).load(imageUrl).placeholder(imageResId).into(ivProfile);
-        } else {
-            ivProfile.setImageResource(imageResId);
+            Glide.with(this).load(imageUrl).into(ivProfile);
         }
-
         tvName.setText(name != null ? name : "");
         tvProfession.setText(profession != null ? profession : "");
         tvDescription.setText(description != null ? description : "");
         tvPrice.setText(price != null ? price : "");
+
         ratingBar.setRating(rating);
         tvRatingText.setText(String.format("%.1f", rating));
         tvRatingCount.setText("(" + ratingCount + " reviews)");
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle(name != null ? name : "Service");
+        // СИНИЙ цвет профессии
+        tvProfession.setTextColor(getResources().getColor(R.color.blue, getTheme()));
+
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            loadUserIdFromFirestore();
         }
+    }
+
+    private void loadUserIdFromFirestore() {
+        if (serviceId == null) return;
+        db.collection("services").document(serviceId).get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        otherUserId = doc.getString("userId");
+                        if (otherUserId == null || otherUserId.isEmpty()) {
+                            Toast.makeText(this, "Error: specialist ID missing", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, "Failed to load user", Toast.LENGTH_SHORT).show());
     }
 
     private void loadReviews() {
         if (serviceId == null) return;
-        db.collection("services").document(serviceId)
-                .collection("reviews")
-                .orderBy("timestamp", Query.Direction.DESCENDING)
+        db.collection("services").document(serviceId).collection("reviews")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
+                .addOnSuccessListener(snapshots -> {
                     List<Review> reviews = new ArrayList<>();
-                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                    for (var doc : snapshots) {
                         String userName = doc.getString("userName");
                         float userRating = doc.getDouble("rating") != null ? doc.getDouble("rating").floatValue() : 0;
                         String comment = doc.getString("comment");
@@ -138,46 +146,81 @@ public class ServiceDetailActivity extends AppCompatActivity {
                         reviews.add(new Review(userName, userRating, comment, timestamp));
                     }
                     reviewAdapter.updateList(reviews);
-                })
-                .addOnFailureListener(e -> Toast.makeText(this, "Failed to load reviews", Toast.LENGTH_SHORT).show());
-    }
-
-    private void setupRatingListener() {
-        ratingBarUser.setOnRatingBarChangeListener((ratingBar, rating, fromUser) -> {
-            if (fromUser) Toast.makeText(this, "Rating: " + rating, Toast.LENGTH_SHORT).show();
-        });
+                });
     }
 
     private void setupReviewButton() {
         btnSubmitReview.setOnClickListener(v -> {
-            // review կոդը (կարող ես հետո ավելացնել, հիմա թողնում եմ դատարկ)
+            String text = etReview.getText().toString().trim();
+            float userRating = ratingBarUser.getRating();
+            if (text.isEmpty() || userRating == 0) {
+                Toast.makeText(this, "Please enter a review and rating", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String userName = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
+            if (userName == null) userName = "User";
+
+            Map<String, Object> review = new HashMap<>();
+            review.put("userId", currentUserId);
+            review.put("userName", userName);
+            review.put("rating", userRating);
+            review.put("comment", text);
+            review.put("timestamp", System.currentTimeMillis());
+
+            db.collection("services").document(serviceId).collection("reviews")
+                    .add(review)
+                    .addOnSuccessListener(doc -> {
+                        Toast.makeText(this, "Review added", Toast.LENGTH_SHORT).show();
+                        etReview.setText("");
+                        ratingBarUser.setRating(0);
+                        updateServiceRating();
+                        loadReviews();
+                    });
         });
     }
 
+    private void updateServiceRating() {
+        db.collection("services").document(serviceId).collection("reviews")
+                .get()
+                .addOnSuccessListener(docs -> {
+                    float total = 0;
+                    int count = docs.size();
+                    for (var doc : docs) {
+                        Double r = doc.getDouble("rating");
+                        if (r != null) total += r;
+                    }
+                    float newAvg = count > 0 ? total / count : 0;
+
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("rating", newAvg);
+                    updates.put("ratingCount", count);
+                    db.collection("services").document(serviceId).update(updates);
+
+                    ratingBar.setRating(newAvg);
+                    tvRatingText.setText(String.format("%.1f", newAvg));
+                    tvRatingCount.setText("(" + count + " reviews)");
+                });
+    }
+
     private void setupButtons() {
-        // ՏԵՍԱԶԱՆԳ (WebRTC)
         btnContact.setOnClickListener(v -> {
-            if (otherUserId == null || otherUserId.trim().isEmpty()) {
-                Toast.makeText(this, "Մասնագետի ID-ն չի գտնվել", Toast.LENGTH_SHORT).show();
+            if (otherUserId == null || otherUserId.isEmpty()) {
+                Toast.makeText(this, "Loading specialist info...", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            Toast.makeText(this, "Տեսազանգը բացվում է...", Toast.LENGTH_SHORT).show();
-
-            Intent intent = new Intent(this, CallActivity.class);
-            intent.putExtra("SPECIALIST_ID", otherUserId);
-            intent.putExtra("IS_CALLER", true);
-            startActivity(intent);
+            Intent i = new Intent(ServiceDetailActivity.this, CallActivity.class);
+            i.putExtra("SPECIALIST_ID", otherUserId);
+            i.putExtra("SPECIALIST_NAME", tvName.getText().toString());
+            i.putExtra("IS_CALLER", true);
+            startActivity(i);
         });
 
-        // Հաղորդագրություն
         btnMessage.setOnClickListener(v -> openChat());
     }
 
     private void openChat() {
-        String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        if (currentUserId == null || otherUserId == null) {
-            Toast.makeText(this, "Cannot start chat", Toast.LENGTH_SHORT).show();
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            Toast.makeText(this, "Wait, loading specialist...", Toast.LENGTH_SHORT).show();
             return;
         }
         if (currentUserId.equals(otherUserId)) {
@@ -185,19 +228,9 @@ public class ServiceDetailActivity extends AppCompatActivity {
             return;
         }
 
-        String chatId = currentUserId.compareTo(otherUserId) < 0 ?
-                currentUserId + "_" + otherUserId : otherUserId + "_" + currentUserId;
-
         Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra("chatId", chatId);
         intent.putExtra("otherUserId", otherUserId);
-        intent.putExtra("otherUserName", serviceName);
+        intent.putExtra("otherUserName", tvName.getText().toString());
         startActivity(intent);
-    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-        onBackPressed();
-        return true;
     }
 }

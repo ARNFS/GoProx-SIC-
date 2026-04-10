@@ -4,11 +4,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,11 +18,13 @@ import com.google.firebase.auth.FirebaseUser;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProfileActivity extends AppCompatActivity {
+import de.hdodenhof.circleimageview.CircleImageView;
 
-    private ImageView ivProfileImage;
+public class ProfileActivity extends BaseActivity {
+
+    private CircleImageView ivProfileAvatar;          // исправлено
     private TextView tvName, tvEmail, tvMemberSince, tvNoPosts;
-    private Button btnEditProfile, btnLogout;
+    private Button btnEditProfile, btnLogout, btnMyServices;
     private RecyclerView rvMyPosts;
     private BottomNavigationView bottomNavigationView;
 
@@ -53,14 +53,15 @@ public class ProfileActivity extends AppCompatActivity {
 
     private void initViews() {
         Toolbar toolbar = findViewById(R.id.toolbar);
-        ivProfileImage = findViewById(R.id.ivProfileImage);
-        tvName = findViewById(R.id.tvName);
-        tvEmail = findViewById(R.id.tvEmail);
-        tvMemberSince = findViewById(R.id.tvMemberSince);
-        tvNoPosts = findViewById(R.id.tvNoPosts);
+        ivProfileAvatar = findViewById(R.id.ivProfileAvatar);        // исправлено
+        tvName = findViewById(R.id.tvProfileName);                   // исправлено
+        tvEmail = findViewById(R.id.tvProfileEmail);                 // исправлено
+        tvMemberSince = findViewById(R.id.tvMemberSince);            // добавлено (убедитесь, что есть в макете)
+        tvNoPosts = findViewById(R.id.tvNoPosts);                    // если используется
         btnEditProfile = findViewById(R.id.btnEditProfile);
+        btnMyServices = findViewById(R.id.btnMyServices);
         btnLogout = findViewById(R.id.btnLogout);
-        rvMyPosts = findViewById(R.id.rvMyPosts);
+        rvMyPosts = findViewById(R.id.rvMyPosts);                    // если нужен список услуг
         bottomNavigationView = findViewById(R.id.bottomNavigation);
 
         setSupportActionBar(toolbar);
@@ -91,23 +92,26 @@ public class ProfileActivity extends AppCompatActivity {
                 tvMemberSince.setText("Member");
             }
 
-            ivProfileImage.setImageResource(R.drawable.ic_profile_placeholder);
+            // Заглушка аватарки
+            ivProfileAvatar.setImageResource(R.drawable.ic_profile_placeholder);
         }
     }
 
     private void loadUserPosts() {
         myPostsList = new ArrayList<>();
 
+        // TODO: загрузить реальные услуги пользователя из Firestore
         if (myPostsList.isEmpty()) {
-            tvNoPosts.setVisibility(View.VISIBLE);
-            rvMyPosts.setVisibility(View.GONE);
+            if (tvNoPosts != null) tvNoPosts.setVisibility(View.VISIBLE);
+            if (rvMyPosts != null) rvMyPosts.setVisibility(View.GONE);
         } else {
-            tvNoPosts.setVisibility(View.GONE);
-            rvMyPosts.setVisibility(View.VISIBLE);
+            if (tvNoPosts != null) tvNoPosts.setVisibility(View.GONE);
+            if (rvMyPosts != null) rvMyPosts.setVisibility(View.VISIBLE);
         }
     }
 
     private void setupRecyclerView() {
+        if (rvMyPosts == null) return;
         rvMyPosts.setLayoutManager(new LinearLayoutManager(this));
         postsAdapter = new ProfilePostsAdapter(myPostsList);
         rvMyPosts.setAdapter(postsAdapter);
@@ -142,7 +146,12 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void setupButtons() {
-        btnEditProfile.setOnClickListener(v -> Toast.makeText(this, "Edit profile", Toast.LENGTH_SHORT).show());
+        btnEditProfile.setOnClickListener(v ->
+                Toast.makeText(this, "Edit profile", Toast.LENGTH_SHORT).show()
+        );
+        btnMyServices.setOnClickListener(v ->
+                Toast.makeText(this, "My services", Toast.LENGTH_SHORT).show()
+        );
         btnLogout.setOnClickListener(v -> {
             mAuth.signOut();
             startActivity(new Intent(this, LoginActivity.class));
