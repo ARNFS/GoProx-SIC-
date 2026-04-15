@@ -1,5 +1,7 @@
 package com.example.goprox;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -11,33 +13,48 @@ import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public abstract class BaseActivity extends AppCompatActivity {
 
     private static final String TAG = "BaseActivity";
+    private static final int REQUEST_POST_NOTIFICATIONS = 1001;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Не вызываем enableFullScreenMode() здесь – ждём setContentView
+        requestNotificationPermission();
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        REQUEST_POST_NOTIFICATIONS);
+            }
+        }
     }
 
     @Override
     public void setContentView(int layoutResID) {
         super.setContentView(layoutResID);
-        enableFullScreenMode();
+        // Отложенный вызов, чтобы окно успело инициализироваться
+        getWindow().getDecorView().post(this::enableFullScreenMode);
     }
 
     @Override
     public void setContentView(View view) {
         super.setContentView(view);
-        enableFullScreenMode();
+        getWindow().getDecorView().post(this::enableFullScreenMode);
     }
 
     @Override
     public void setContentView(View view, ViewGroup.LayoutParams params) {
         super.setContentView(view, params);
-        enableFullScreenMode();
+        getWindow().getDecorView().post(this::enableFullScreenMode);
     }
 
     @Override
@@ -51,7 +68,6 @@ public abstract class BaseActivity extends AppCompatActivity {
     private void enableFullScreenMode() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // Android 11+
                 getWindow().setDecorFitsSystemWindows(false);
                 WindowInsetsController controller = getWindow().getInsetsController();
                 if (controller != null) {
@@ -59,7 +75,6 @@ public abstract class BaseActivity extends AppCompatActivity {
                     controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 }
             } else {
-                // Android 10 и ниже
                 getWindow().setFlags(
                         WindowManager.LayoutParams.FLAG_FULLSCREEN,
                         WindowManager.LayoutParams.FLAG_FULLSCREEN

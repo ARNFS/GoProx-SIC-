@@ -68,7 +68,7 @@ fun getLocalProperty(key: String): String {
 }
 
 dependencies {
-    // AndroidX & Material (оставляем последние стабильные версии)
+    // AndroidX & Material
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
@@ -111,8 +111,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // ZegoCloud Call Kit
-    implementation("im.zego:zego_uikit_prebuilt_call_android:+")
+    // ✅ WebRTC – оставляем только одну актуальную библиотеку
+    implementation("io.github.webrtc-sdk:android:137.7151.05")
+    implementation("com.google.firebase:firebase-messaging")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

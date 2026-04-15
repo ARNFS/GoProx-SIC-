@@ -9,6 +9,7 @@ import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -109,7 +110,6 @@ public class ServiceDetailActivity extends AppCompatActivity {
         tvRatingText.setText(String.format("%.1f", rating));
         tvRatingCount.setText("(" + ratingCount + " reviews)");
 
-        // СИНИЙ цвет профессии
         tvProfession.setTextColor(getResources().getColor(R.color.blue, getTheme()));
 
         if (otherUserId == null || otherUserId.isEmpty()) {
@@ -208,11 +208,18 @@ public class ServiceDetailActivity extends AppCompatActivity {
                 Toast.makeText(this, "Loading specialist info...", Toast.LENGTH_SHORT).show();
                 return;
             }
-            Intent i = new Intent(ServiceDetailActivity.this, CallActivity.class);
-            i.putExtra("SPECIALIST_ID", otherUserId);
-            i.putExtra("SPECIALIST_NAME", tvName.getText().toString());
-            i.putExtra("IS_CALLER", true);
-            startActivity(i);
+
+            new AlertDialog.Builder(this)
+                    .setTitle("Call type")
+                    .setItems(new String[]{"Audio", "Video"}, (dialog, which) -> {
+                        Intent i = new Intent(ServiceDetailActivity.this, CallActivity.class);
+                        i.putExtra("SPECIALIST_ID", otherUserId);
+                        i.putExtra("SPECIALIST_NAME", tvName.getText().toString());
+                        i.putExtra("IS_AUDIO_ONLY", which == 0);
+                        i.putExtra("currentUserId", currentUserId);
+                        startActivity(i);
+                    })
+                    .show();
         });
 
         btnMessage.setOnClickListener(v -> openChat());
