@@ -8,17 +8,16 @@ plugins {
 
 android {
     namespace = "com.example.goprox"
-    compileSdk = 36   // ← Вернули 36, как требуют библиотеки
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.goprox"
         minSdk = 26
-        targetSdk = 36  // ← Также поднимаем до 36
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // API Keys from local.properties
         val groqApiKey = getLocalProperty("GROQ_API_KEY")
         val deepseekApiKey = getLocalProperty("DEEPSEEK_API_KEY")
         val agoraAppId = getLocalProperty("AGORA_APP_ID")
@@ -111,12 +110,15 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // ✅ WebRTC – оставляем только одну актуальную библиотеку
-    implementation("io.github.webrtc-sdk:android:137.7151.05")
-    implementation("com.google.firebase:firebase-messaging")
+    // Agora Video SDK
+    implementation("io.agora.rtc:full-sdk:4.5.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // Google Maps
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 }

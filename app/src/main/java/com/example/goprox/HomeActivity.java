@@ -1,29 +1,41 @@
 package com.example.goprox;
 
 import android.content.Intent;
+import android.location.Location;
 import android.os.Bundle;
-import android.os.Handler;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-public class HomeActivity extends BaseActivity {
+public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
 
     private RecyclerView recyclerView;
     private ServiceAdapter serviceAdapter;
@@ -32,14 +44,19 @@ public class HomeActivity extends BaseActivity {
     private EditText etSearch;
     private ImageView ivAIToggle;
     private LinearLayout llNotFound;
+    private FrameLayout mapContainer;
+    private LinearLayout listContainer;
 
     private List<Service> serviceList;
     private List<Service> originalServiceList;
 
     private FirebaseService firebaseService;
-
-    // Фильтр, переданный из AI
     private ArrayList<String> aiFilterList;
+
+    // Карта
+    private GoogleMap mMap;
+    private FusedLocationProviderClient fusedLocationClient;
+    private Map<String, Service> markerServiceMap = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +69,7 @@ public class HomeActivity extends BaseActivity {
         initViews();
         setWelcomeMessage();
         setupRecyclerView();
+        setupMap();
 
         firebaseService = new FirebaseService();
         loadServicesFromFirebase();
@@ -61,8 +79,10 @@ public class HomeActivity extends BaseActivity {
         setupBottomNavigation();
         setupItemClickListener();
 
-        // Получаем фильтр от AI (если есть)
         aiFilterList = getIntent().getStringArrayListExtra("profession_filter_list");
+
+        // Кнопка переключения на карту (можно добавить в макет FloatingActionButton)
+        // Пока просто показываем карту при загрузке, если есть координаты
     }
 
     private void initViews() {
@@ -72,6 +92,74 @@ public class HomeActivity extends BaseActivity {
         etSearch = findViewById(R.id.etSearch);
         ivAIToggle = findViewById(R.id.ivAIToggle);
         llNotFound = findViewById(R.id.llNotFound);
+        mapContainer = findViewById(R.id.mapContainer);
+        listContainer = findViewById(R.id.listContainer); // Не забудь добавить id в макет
+    }
+
+    // ⬇️ ДОБАВЛЕНО: Инициализация карты
+    private void setupMap() {
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.mapView);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+    }
+
+    @Override
+    public void onMapReady(@NonNull GoogleMap googleMap) {
+        mMap = googleMap;
+        // Показываем текущее местоположение
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            mMap.setMyLocationEnabled(true);
+            fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
+                if (location != null) {
+                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12));
+                }
+            });
+        }
+        // Добавляем маркеры специалистов
+        addMarkersToMap();
+    }
+
+    private void addMarkersToMap() {
+        if (mMap == null || serviceList.isEmpty()) return;
+        mMap.clear();
+        markerServiceMap.clear();
+
+        for (Service service : serviceList) {
+            // Предполагаем, что у сервиса есть поля latitude и longitude
+            // Если их нет, нужно добавить в модель Service
+            double lat = service.getLatitude();
+            double lng = service.getLongitude();
+
+            LatLng position = new LatLng(lat, lng);
+            Marker marker = mMap.addMarker(new MarkerOptions()
+                    .position(position)
+                    .title(service.getName())
+                    .snippet(service.getProfession())
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+            markerServiceMap.put(marker.getId(), service);
+        }
+
+        mMap.setOnMarkerClickListener(marker -> {
+            Service service = markerServiceMap.get(marker.getId());
+            if (service != null) {
+                Intent i = new Intent(HomeActivity.this, ServiceDetailActivity.class);
+                i.putExtra("serviceId", service.getId());
+                i.putExtra("name", service.getName());
+                i.putExtra("profession", service.getProfession());
+                i.putExtra("description", service.getDescription());
+                i.putExtra("price", service.getPrice());
+                i.putExtra("rating", service.getRating());
+                i.putExtra("ratingCount", service.getRatingCount());
+                i.putExtra("imageUrl", service.getImageUrl());
+                i.putExtra("userId", service.getUserId());
+                startActivity(i);
+            }
+            return true;
+        });
     }
 
     private void setWelcomeMessage() {
@@ -90,53 +178,34 @@ public class HomeActivity extends BaseActivity {
         firebaseService.getAllServices(services -> {
             originalServiceList.clear();
             originalServiceList.addAll(services);
-
-            // Применяем AI-фильтр, если он есть
             if (aiFilterList != null && !aiFilterList.isEmpty()) {
                 applyAiFilter();
             } else {
-                // Иначе показываем все, отсортированные по рейтингу
                 serviceList.clear();
                 serviceList.addAll(originalServiceList);
                 Collections.sort(serviceList, (a, b) -> Float.compare(b.getRating(), a.getRating()));
                 serviceAdapter.updateList(serviceList);
             }
             updateEmptyView();
+            addMarkersToMap(); // Обновляем маркеры после загрузки данных
         });
     }
 
-    /**
-     * Применяет фильтр по списку профессий/тегов от AI.
-     */
     private void applyAiFilter() {
         List<Service> filtered = new ArrayList<>();
         for (Service s : originalServiceList) {
-            boolean matches = false;
             String profLower = s.getProfession().toLowerCase();
             String descLower = s.getDescription() != null ? s.getDescription().toLowerCase() : "";
+            StringBuilder allText = new StringBuilder(profLower + " " + descLower);
+            if (s.getTags() != null) for (String t : s.getTags()) allText.append(" ").append(t.toLowerCase());
 
-            // Собираем все ключевые слова сервиса: профессия + описание + теги
-            StringBuilder allText = new StringBuilder();
-            allText.append(profLower).append(" ").append(descLower);
-            if (s.getTags() != null) {
-                for (String tag : s.getTags()) {
-                    allText.append(" ").append(tag.toLowerCase());
-                }
-            }
-
-            for (String filterTitle : aiFilterList) {
-                String ft = filterTitle.toLowerCase().trim();
-                // Проверяем, содержит ли профессия фильтр, или фильтр содержится в общем тексте
-                if (profLower.contains(ft) || allText.toString().contains(ft)) {
-                    matches = true;
+            for (String ft : aiFilterList) {
+                if (profLower.contains(ft.trim().toLowerCase()) || allText.toString().contains(ft.trim().toLowerCase())) {
+                    filtered.add(s);
                     break;
                 }
             }
-            if (matches) {
-                filtered.add(s);
-            }
         }
-        // Сортируем по рейтингу
         Collections.sort(filtered, (a, b) -> Float.compare(b.getRating(), a.getRating()));
         serviceList.clear();
         serviceList.addAll(filtered);
@@ -159,33 +228,28 @@ public class HomeActivity extends BaseActivity {
 
     private void setupSearch() {
         etSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void afterTextChanged(Editable s) {}
-            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 filterServices(s.toString());
             }
+            public void afterTextChanged(Editable s) {}
         });
     }
 
     private void filterServices(String query) {
-        List<Service> baseList = serviceList.isEmpty() ? originalServiceList : serviceList;
+        List<Service> base = serviceList.isEmpty() ? originalServiceList : serviceList;
         List<Service> filtered = new ArrayList<>();
-        if (query.isEmpty()) {
-            filtered.addAll(baseList);
-        } else {
+        if (query.isEmpty()) filtered.addAll(base);
+        else {
             String q = query.toLowerCase();
-            for (Service s : baseList) {
-                if (s.getName().toLowerCase().contains(q) || s.getProfession().toLowerCase().contains(q)) {
-                    filtered.add(s);
-                }
-            }
+            for (Service s : base) if (s.getName().toLowerCase().contains(q) || s.getProfession().toLowerCase().contains(q)) filtered.add(s);
         }
         Collections.sort(filtered, (a, b) -> Float.compare(b.getRating(), a.getRating()));
         serviceAdapter.updateList(filtered);
         serviceList.clear();
         serviceList.addAll(filtered);
         updateEmptyView();
+        addMarkersToMap(); // Обновляем маркеры после фильтрации
     }
 
     private void setupBottomNavigation() {
@@ -203,7 +267,7 @@ public class HomeActivity extends BaseActivity {
     private void setupItemClickListener() {
         serviceAdapter.setOnItemClickListener(position -> {
             Service s = serviceList.get(position);
-            Intent i = new Intent(HomeActivity.this, ServiceDetailActivity.class);
+            Intent i = new Intent(this, ServiceDetailActivity.class);
             i.putExtra("serviceId", s.getId());
             i.putExtra("name", s.getName());
             i.putExtra("profession", s.getProfession());

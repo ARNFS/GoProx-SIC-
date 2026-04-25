@@ -13,7 +13,6 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -33,6 +32,7 @@ import java.util.regex.Pattern;
 public class AddPostActivity extends BaseActivity {
 
     private EditText etName, etProfession, etDescription, etPrice;
+    private EditText etCountry, etCity;
     private Button btnSubmit, btnSelectImage;
     private ImageView ivServiceImage;
     private BottomNavigationView bottomNavigationView;
@@ -73,6 +73,8 @@ public class AddPostActivity extends BaseActivity {
         etProfession = findViewById(R.id.etProfession);
         etDescription = findViewById(R.id.etDescription);
         etPrice = findViewById(R.id.etPrice);
+        etCountry = findViewById(R.id.etCountry);
+        etCity = findViewById(R.id.etCity);
         btnSubmit = findViewById(R.id.btnSubmit);
         btnSelectImage = findViewById(R.id.btnSelectImage);
         ivServiceImage = findViewById(R.id.ivServiceImage);
@@ -130,9 +132,11 @@ public class AddPostActivity extends BaseActivity {
         String profession = etProfession.getText().toString().trim();
         String description = etDescription.getText().toString().trim();
         String priceNumber = etPrice.getText().toString().trim();
+        String country = etCountry.getText().toString().trim();
+        String city = etCity.getText().toString().trim();
 
         if (name.isEmpty() || profession.isEmpty() || description.isEmpty() || priceNumber.isEmpty()) {
-            Toast.makeText(this, "Fill all fields", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Fill all required fields", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -160,13 +164,14 @@ public class AddPostActivity extends BaseActivity {
         String priceFormatted = priceInt + "$/hour";
 
         if (imageUri == null) {
-            saveServiceToFirestore(name, profession, description, priceFormatted, null);
+            saveServiceToFirestore(name, profession, description, priceFormatted, null, country, city);
         } else {
-            uploadImageAndSave(name, profession, description, priceFormatted);
+            uploadImageAndSave(name, profession, description, priceFormatted, country, city);
         }
     }
 
-    private void uploadImageAndSave(String name, String profession, String description, String priceFormatted) {
+    private void uploadImageAndSave(String name, String profession, String description,
+                                    String priceFormatted, String country, String city) {
         String fileExtension = getFileExtension(imageUri);
         String fileName = UUID.randomUUID().toString() + "." + fileExtension;
         StorageReference fileRef = storageRef.child("service_images/" + fileName);
@@ -175,17 +180,18 @@ public class AddPostActivity extends BaseActivity {
                 .addOnSuccessListener(taskSnapshot -> {
                     fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
                         String imageUrl = uri.toString();
-                        saveServiceToFirestore(name, profession, description, priceFormatted, imageUrl);
+                        saveServiceToFirestore(name, profession, description, priceFormatted, imageUrl, country, city);
                     });
                 })
                 .addOnFailureListener(e -> {
                     Toast.makeText(this, "Image upload failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    saveServiceToFirestore(name, profession, description, priceFormatted, null);
+                    saveServiceToFirestore(name, profession, description, priceFormatted, null, country, city);
                 });
     }
 
     private void saveServiceToFirestore(String name, String profession, String description,
-                                        String priceFormatted, String imageUrl) {
+                                        String priceFormatted, String imageUrl,
+                                        String country, String city) {
         List<String> tags = generateTags(profession, description);
 
         Map<String, Object> service = new HashMap<>();
@@ -199,6 +205,8 @@ public class AddPostActivity extends BaseActivity {
         service.put("tags", tags);
         service.put("createdAt", System.currentTimeMillis());
         service.put("imageUrl", imageUrl);
+        if (country != null && !country.isEmpty()) service.put("country", country);
+        if (city != null && !city.isEmpty()) service.put("city", city);
 
         db.collection("services")
                 .add(service)

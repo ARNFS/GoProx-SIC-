@@ -14,7 +14,24 @@
         app:titleTextColor="@android:color/white"
         android:elevation="4dp" />
 
+    <!-- ⬇️ ДОБАВЛЕНО: Контейнер карты -->
+    <FrameLayout
+        android:id="@+id/mapContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone">
+
+        <fragment
+            android:id="@+id/mapView"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Оригинальный контейнер списка (оставлен без изменений) -->
     <LinearLayout
+        android:id="@+id/listContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
@@ -55,7 +72,7 @@
                 android:padding="8dp"
                 android:layout_marginStart="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/primary" />
+                app:tint="@color/primary" />
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
@@ -76,7 +93,7 @@
                 android:layout_width="80dp"
                 android:layout_height="80dp"
                 android:src="@drawable/ic_not_found"
-                android:tint="@color/gray" />
+                app:tint="@color/gray" />
 
             <TextView
                 android:layout_width="wrap_content"

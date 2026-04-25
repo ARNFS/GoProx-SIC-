@@ -50,16 +50,13 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
         holder.tvPrice.setText(service.getPrice());
         holder.ratingBar.setRating(service.getRating());
 
-        // КРАСНЫЙ цвет профессии
+        // Цвета
         holder.tvProfession.setTextColor(
-                ContextCompat.getColor(holder.itemView.getContext(), R.color.red)
-        );
-
-        // Синий цвет описания (остаётся)
+                ContextCompat.getColor(holder.itemView.getContext(), R.color.red));
         holder.tvDescription.setTextColor(
-                ContextCompat.getColor(holder.itemView.getContext(), R.color.blue)
-        );
+                ContextCompat.getColor(holder.itemView.getContext(), R.color.blue));
 
+        // Аватар
         if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
             Glide.with(holder.itemView.getContext())
                     .load(service.getImageUrl())
@@ -67,6 +64,26 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
                     .into(holder.ivProfile);
         } else {
             holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+        }
+
+        // Локация
+        String country = service.getCountry();
+        String city = service.getCity();
+        if (country != null && !country.isEmpty() && city != null && !city.isEmpty()) {
+            holder.tvLocation.setText(city + ", " + country);
+            holder.ivLocation.setVisibility(View.VISIBLE);
+            holder.tvLocation.setVisibility(View.VISIBLE);
+        } else if (country != null && !country.isEmpty()) {
+            holder.tvLocation.setText(country);
+            holder.ivLocation.setVisibility(View.VISIBLE);
+            holder.tvLocation.setVisibility(View.VISIBLE);
+        } else if (city != null && !city.isEmpty()) {
+            holder.tvLocation.setText(city);
+            holder.ivLocation.setVisibility(View.VISIBLE);
+            holder.tvLocation.setVisibility(View.VISIBLE);
+        } else {
+            holder.ivLocation.setVisibility(View.GONE);
+            holder.tvLocation.setVisibility(View.GONE);
         }
 
         holder.itemView.setOnClickListener(v -> {
@@ -90,18 +107,20 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView ivProfile;
-        TextView tvName, tvProfession, tvDescription, tvPrice;
+        ImageView ivProfile, ivLocation;
+        TextView tvName, tvProfession, tvDescription, tvPrice, tvLocation;
         RatingBar ratingBar;
         CardView cardView;
 
         ViewHolder(View itemView) {
             super(itemView);
             ivProfile = itemView.findViewById(R.id.ivServiceImage);
+            ivLocation = itemView.findViewById(R.id.ivLocation);
             tvName = itemView.findViewById(R.id.tvServiceName);
             tvProfession = itemView.findViewById(R.id.tvServiceProfession);
             tvDescription = itemView.findViewById(R.id.tvServiceDescription);
             tvPrice = itemView.findViewById(R.id.tvServicePrice);
+            tvLocation = itemView.findViewById(R.id.tvServiceLocation);
             ratingBar = itemView.findViewById(R.id.ratingBarService);
             cardView = (CardView) itemView;
         }

@@ -212,11 +212,12 @@ public class ServiceDetailActivity extends AppCompatActivity {
             new AlertDialog.Builder(this)
                     .setTitle("Call type")
                     .setItems(new String[]{"Audio", "Video"}, (dialog, which) -> {
+                        String channelName = (currentUserId.compareTo(otherUserId) < 0) ?
+                                currentUserId + "_" + otherUserId : otherUserId + "_" + currentUserId;
+
                         Intent i = new Intent(ServiceDetailActivity.this, CallActivity.class);
-                        i.putExtra("SPECIALIST_ID", otherUserId);
-                        i.putExtra("SPECIALIST_NAME", tvName.getText().toString());
+                        i.putExtra("channelName", channelName);
                         i.putExtra("IS_AUDIO_ONLY", which == 0);
-                        i.putExtra("currentUserId", currentUserId);
                         startActivity(i);
                     })
                     .show();

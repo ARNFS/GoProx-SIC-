@@ -1,355 +1,218 @@
 package com.example.goprox;
 
-import android.media.AudioManager;
-import android.media.MediaPlayer;
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration;
-import com.google.firebase.firestore.SetOptions;
 
-import org.webrtc.IceCandidate;
-import org.webrtc.SessionDescription;
-import org.webrtc.SurfaceViewRenderer;
+import io.agora.rtc2.ChannelMediaOptions;
+import io.agora.rtc2.Constants;
+import io.agora.rtc2.IRtcEngineEventHandler;
+import io.agora.rtc2.RtcEngine;
+import io.agora.rtc2.RtcEngineConfig;
+import io.agora.rtc2.video.VideoCanvas;
 
-import java.util.HashMap;
-import java.util.Map;
+public class CallActivity extends BaseActivity {
 
-public class CallActivity extends AppCompatActivity implements WebRTCManager.SignalingListener {
+    private static final int PERMISSION_REQ_ID = 22;
+    private static final String APP_ID = "a5179791fb8d43cc8ae79020e60e3360";
 
-    private static final String TAG = "CallActivity";
+    private RtcEngine mRtcEngine;
+    private FrameLayout mLocalVideoContainer;
+    private FrameLayout mRemoteVideoContainer;
+    private ImageButton mEndCallButton;
+    private ImageButton mToggleMicButton;
+    private ImageButton mToggleCameraButton;
+    private ImageButton mShareCallButton;
 
-    private SurfaceViewRenderer localVideoView;
-    private SurfaceViewRenderer remoteVideoView;
-    private FrameLayout remoteVideoContainer;
-    private ImageButton btnEndCall, btnToggleMic, btnToggleCamera, btnToggleSpeaker, btnFlipCamera;
-    private TextView tvCallStatus;
+    private String mChannelName;
+    private boolean mIsAudioOnly;
+    private boolean mIsMicEnabled = true;
+    private boolean mIsCameraEnabled = true;
 
-    private WebRTCManager webRTCManager;
-    private FirebaseFirestore firestore;
-    private ListenerRegistration callListener;
-    private String currentUserId, targetUserId, roomName;
-    private boolean isCaller;
-    private boolean isAudioOnly;
-    private boolean micEnabled = true;
-    private boolean cameraEnabled = true;
-    private boolean speakerEnabled = false;
-    private AudioManager audioManager;
-    private boolean isCallEnded = false;
-    private final Handler statusHandler = new Handler();
+    private final IRtcEngineEventHandler mRtcEventHandler = new IRtcEngineEventHandler() {
+        @Override
+        public void onJoinChannelSuccess(String channel, int uid, int elapsed) {
+            runOnUiThread(() -> Toast.makeText(CallActivity.this, "Joined channel", Toast.LENGTH_SHORT).show());
+        }
 
-    private MediaPlayer ringtonePlayer;   // для гудков
+        @Override
+        public void onUserJoined(int uid, int elapsed) {
+            runOnUiThread(() -> {
+                SurfaceView remoteView = new SurfaceView(CallActivity.this);
+                mRemoteVideoContainer.addView(remoteView);
+                mRtcEngine.setupRemoteVideo(new VideoCanvas(remoteView, VideoCanvas.RENDER_MODE_HIDDEN, uid));
+                Toast.makeText(CallActivity.this, "User joined", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        @Override
+        public void onUserOffline(int uid, int reason) {
+            runOnUiThread(() -> {
+                mRemoteVideoContainer.removeAllViews();
+                Toast.makeText(CallActivity.this, "User left", Toast.LENGTH_SHORT).show();
+            });
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_call);
 
-        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        mChannelName = getIntent().getStringExtra("channelName");
+        mIsAudioOnly = getIntent().getBooleanExtra("IS_AUDIO_ONLY", false);
 
-        currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        targetUserId = getIntent().getStringExtra("SPECIALIST_ID");
-        isAudioOnly = getIntent().getBooleanExtra("IS_AUDIO_ONLY", false);
-        isCaller = getIntent().getBooleanExtra("IS_CALLER", true);
-
-        if (targetUserId == null) {
+        if (mChannelName == null) {
             Toast.makeText(this, "Invalid call data", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        roomName = (currentUserId.compareTo(targetUserId) < 0) ?
-                currentUserId + "_" + targetUserId : targetUserId + "_" + currentUserId;
-
-        firestore = FirebaseFirestore.getInstance();
-
         initViews();
-        setupWebRTC();
-
-        if (isCaller) {
-            startOutgoingCall();
-        } else {
-            showIncomingCallDialog();
-        }
-
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override
-            public void handleOnBackPressed() {
-                endCall();
-            }
-        });
+        checkPermissions();
     }
 
     private void initViews() {
-        localVideoView = findViewById(R.id.localVideoView);
-        remoteVideoView = findViewById(R.id.remoteVideoView);
-        remoteVideoContainer = findViewById(R.id.remoteVideoContainer);
-        btnEndCall = findViewById(R.id.btnEndCall);
-        btnToggleMic = findViewById(R.id.btnToggleMic);
-        btnToggleCamera = findViewById(R.id.btnToggleCamera);
-        btnToggleSpeaker = findViewById(R.id.btnToggleSpeaker);
-        btnFlipCamera = findViewById(R.id.btnFlipCamera);
-        tvCallStatus = findViewById(R.id.tvCallStatus);
+        mLocalVideoContainer = findViewById(R.id.local_video_container);
+        mRemoteVideoContainer = findViewById(R.id.remote_video_container);
+        mEndCallButton = findViewById(R.id.btn_end_call);
+        mToggleMicButton = findViewById(R.id.btn_toggle_mic);
+        mToggleCameraButton = findViewById(R.id.btn_toggle_camera);
+        mShareCallButton = findViewById(R.id.btn_share_call);
 
-        btnEndCall.setOnClickListener(v -> endCall());
-        btnToggleMic.setOnClickListener(v -> toggleMic());
-        btnToggleCamera.setOnClickListener(v -> toggleCamera());
-        btnToggleSpeaker.setOnClickListener(v -> toggleSpeaker());
-        btnFlipCamera.setOnClickListener(v -> flipCamera());
+        mEndCallButton.setOnClickListener(v -> finish());
+        mToggleMicButton.setOnClickListener(v -> toggleMic());
+        mToggleCameraButton.setOnClickListener(v -> toggleCamera());
+        mShareCallButton.setOnClickListener(v -> shareCallLink());
 
-        // Для аудиозвонка полностью скрываем видео
-        if (isAudioOnly) {
-            localVideoView.setVisibility(View.GONE);
-            remoteVideoContainer.setVisibility(View.GONE);
-            btnToggleCamera.setVisibility(View.GONE);
-            btnFlipCamera.setVisibility(View.GONE);
+        if (mIsAudioOnly) {
+            mToggleCameraButton.setVisibility(View.GONE);
         }
     }
 
-    private void setupWebRTC() {
-        webRTCManager = new WebRTCManager(this, localVideoView, remoteVideoView, this);
-        webRTCManager.startLocalStream(isAudioOnly);
-        webRTCManager.createPeerConnection();
+    private void shareCallLink() {
+        String callLink = "https://agora.io/call/" + mChannelName;
+
+        Intent intent = new Intent(this, ChatActivity.class);
+        intent.putExtra("callLink", callLink);
+        intent.putExtra("otherUserId", getOtherUserIdFromChannel());
+        startActivity(intent);
+
+        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        android.content.ClipData clip = android.content.ClipData.newPlainText("call link", callLink);
+        clipboard.setPrimaryClip(clip);
+        Toast.makeText(this, "Link copied to clipboard", Toast.LENGTH_SHORT).show();
     }
 
-    private void startOutgoingCall() {
-        tvCallStatus.setText("Calling...");
-        tvCallStatus.setVisibility(View.VISIBLE);
-        webRTCManager.createOffer();
-
-        // --- Запускаем гудки ---
-        startRingtone();
-
-        Map<String, Object> callData = new HashMap<>();
-        callData.put("callerId", currentUserId);
-        callData.put("calleeId", targetUserId);
-        callData.put("status", "ringing");
-        callData.put("audioOnly", isAudioOnly);
-        callData.put("timestamp", FieldValue.serverTimestamp());
-
-        firestore.collection("calls").document(roomName)
-                .set(callData, SetOptions.merge())
-                .addOnFailureListener(e -> {
-                    Toast.makeText(this, "Failed to initiate call", Toast.LENGTH_SHORT).show();
-                    stopRingtone();
-                    finish();
-                });
-
-        listenForCallUpdates();
+    private String getOtherUserIdFromChannel() {
+        String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        String[] parts = mChannelName.split("_");
+        if (parts.length == 2) {
+            return parts[0].equals(currentUserId) ? parts[1] : parts[0];
+        }
+        return "";
     }
 
-    private void startRingtone() {
+    private void checkPermissions() {
+        String[] permissions = {
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.CAMERA
+        };
+
+        boolean allGranted = true;
+        for (String perm : permissions) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                allGranted = false;
+                break;
+            }
+        }
+
+        if (allGranted) {
+            initializeAgoraEngine();
+        } else {
+            ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQ_ID);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQ_ID) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                initializeAgoraEngine();
+            } else {
+                Toast.makeText(this, "Permissions required", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
+    }
+
+    private void initializeAgoraEngine() {
         try {
-            ringtonePlayer = MediaPlayer.create(this, R.raw.ringtone);
-            if (ringtonePlayer != null) {
-                ringtonePlayer.setLooping(true);
-                ringtonePlayer.start();
-            }
+            RtcEngineConfig config = new RtcEngineConfig();
+            config.mContext = getApplicationContext();
+            config.mAppId = APP_ID;
+            config.mEventHandler = mRtcEventHandler;
+            mRtcEngine = RtcEngine.create(config);
+
+            mRtcEngine.enableVideo();
+            mRtcEngine.enableAudio();
+
+            SurfaceView localView = new SurfaceView(this);
+            mLocalVideoContainer.addView(localView);
+            mRtcEngine.setupLocalVideo(new VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0));
+            mRtcEngine.startPreview();
+
+            joinChannel();
         } catch (Exception e) {
-            Log.e(TAG, "Ringtone error: " + e.getMessage());
+            Toast.makeText(this, "Failed to initialize Agora: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            finish();
         }
     }
 
-    private void stopRingtone() {
-        if (ringtonePlayer != null) {
-            try {
-                ringtonePlayer.stop();
-                ringtonePlayer.release();
-            } catch (Exception e) {
-                Log.e(TAG, "Error stopping ringtone: " + e.getMessage());
-            }
-            ringtonePlayer = null;
-        }
-    }
+    private void joinChannel() {
+        ChannelMediaOptions options = new ChannelMediaOptions();
+        options.channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION;
+        options.clientRoleType = Constants.CLIENT_ROLE_BROADCASTER;
+        options.autoSubscribeAudio = true;
+        options.autoSubscribeVideo = !mIsAudioOnly;
+        options.publishCameraTrack = !mIsAudioOnly;
+        options.publishMicrophoneTrack = true;
 
-    private void showIncomingCallDialog() {
-        // Загружаем имя звонящего
-        firestore.collection("users").document(targetUserId).get()
-                .addOnSuccessListener(doc -> {
-                    String callerName = doc.getString("name");
-                    if (callerName == null) callerName = "User";
-
-                    new AlertDialog.Builder(this)
-                            .setTitle("Incoming " + (isAudioOnly ? "Audio" : "Video") + " Call")
-                            .setMessage(callerName + " is calling you...")
-                            .setPositiveButton("Accept", (dialog, which) -> acceptCall())
-                            .setNegativeButton("Decline", (dialog, which) -> rejectCall())
-                            .setCancelable(false)
-                            .show();
-                });
-    }
-
-    private void acceptCall() {
-        tvCallStatus.setVisibility(View.GONE);
-        firestore.collection("calls").document(roomName)
-                .update("status", "accepted");
-        listenForCallUpdates();
-    }
-
-    private void rejectCall() {
-        firestore.collection("calls").document(roomName)
-                .update("status", "rejected")
-                .addOnCompleteListener(t -> finish());
-    }
-
-    private void listenForCallUpdates() {
-        DocumentReference callRef = firestore.collection("calls").document(roomName);
-        callListener = callRef.addSnapshotListener((snapshot, error) -> {
-            if (error != null || snapshot == null || !snapshot.exists()) {
-                return;
-            }
-
-            String status = snapshot.getString("status");
-
-            if ("ended".equals(status) || "rejected".equals(status)) {
-                if (!isCallEnded) {
-                    isCallEnded = true;
-                    Toast.makeText(this, "Call ended", Toast.LENGTH_SHORT).show();
-                    finish();
-                }
-                return;
-            }
-
-            if ("accepted".equals(status)) {
-                stopRingtone();
-                tvCallStatus.setVisibility(View.GONE);
-            }
-
-            // Обработка SDP
-            Map<String, Object> offer = (Map<String, Object>) snapshot.get("offer");
-            Map<String, Object> answer = (Map<String, Object>) snapshot.get("answer");
-
-            if (!isCaller && offer != null) {
-                SessionDescription sdp = new SessionDescription(
-                        SessionDescription.Type.OFFER,
-                        (String) offer.get("sdp")
-                );
-                webRTCManager.onRemoteSdpReceived(sdp);
-                callRef.update("offer", FieldValue.delete());
-            }
-
-            if (isCaller && answer != null) {
-                SessionDescription sdp = new SessionDescription(
-                        SessionDescription.Type.ANSWER,
-                        (String) answer.get("sdp")
-                );
-                webRTCManager.onRemoteSdpReceived(sdp);
-                callRef.update("answer", FieldValue.delete());
-            }
-
-            // Обработка ICE
-            Map<String, Object> callerIce = (Map<String, Object>) snapshot.get("callerIce");
-            Map<String, Object> calleeIce = (Map<String, Object>) snapshot.get("calleeIce");
-
-            if (!isCaller && callerIce != null) {
-                IceCandidate candidate = new IceCandidate(
-                        (String) callerIce.get("sdpMid"),
-                        ((Long) callerIce.get("sdpMLineIndex")).intValue(),
-                        (String) callerIce.get("sdp")
-                );
-                webRTCManager.onRemoteIceCandidateReceived(candidate);
-            }
-
-            if (isCaller && calleeIce != null) {
-                IceCandidate candidate = new IceCandidate(
-                        (String) calleeIce.get("sdpMid"),
-                        ((Long) calleeIce.get("sdpMLineIndex")).intValue(),
-                        (String) calleeIce.get("sdp")
-                );
-                webRTCManager.onRemoteIceCandidateReceived(candidate);
-            }
-        });
-    }
-
-    @Override
-    public void onSendSdp(SessionDescription sdp) {
-        Map<String, Object> sdpMap = new HashMap<>();
-        sdpMap.put("type", sdp.type.canonicalForm());
-        sdpMap.put("sdp", sdp.description);
-
-        DocumentReference callRef = firestore.collection("calls").document(roomName);
-        if (sdp.type == SessionDescription.Type.OFFER) {
-            callRef.update("offer", sdpMap);
-        } else {
-            callRef.update("answer", sdpMap);
-        }
-    }
-
-    @Override
-    public void onSendIceCandidate(IceCandidate candidate) {
-        Map<String, Object> iceMap = new HashMap<>();
-        iceMap.put("sdpMid", candidate.sdpMid);
-        iceMap.put("sdpMLineIndex", candidate.sdpMLineIndex);
-        iceMap.put("sdp", candidate.sdp);
-
-        DocumentReference callRef = firestore.collection("calls").document(roomName);
-        if (isCaller) {
-            callRef.update("callerIce", iceMap);
-        } else {
-            callRef.update("calleeIce", iceMap);
-        }
+        mRtcEngine.joinChannel(null, mChannelName, 0, options);
     }
 
     private void toggleMic() {
-        micEnabled = !micEnabled;
-        webRTCManager.setMicEnabled(micEnabled);
-        btnToggleMic.setImageResource(micEnabled ? R.drawable.ic_mic_on : R.drawable.ic_mic_off);
+        mIsMicEnabled = !mIsMicEnabled;
+        mRtcEngine.muteLocalAudioStream(!mIsMicEnabled);
+        mToggleMicButton.setImageResource(mIsMicEnabled ? R.drawable.ic_mic_on : R.drawable.ic_mic_off);
     }
 
     private void toggleCamera() {
-        cameraEnabled = !cameraEnabled;
-        webRTCManager.setCameraEnabled(cameraEnabled);
-        btnToggleCamera.setImageResource(cameraEnabled ? R.drawable.ic_camera_on : R.drawable.ic_camera_off);
-    }
-
-    private void toggleSpeaker() {
-        speakerEnabled = !speakerEnabled;
-        audioManager.setSpeakerphoneOn(speakerEnabled);
-        btnToggleSpeaker.setImageResource(speakerEnabled ? R.drawable.ic_speaker_on : R.drawable.ic_speaker_off);
-    }
-
-    private void flipCamera() {
-        webRTCManager.flipCamera();
-    }
-
-    private void endCall() {
-        isCallEnded = true;
-        stopRingtone();
-        firestore.collection("calls").document(roomName)
-                .update("status", "ended")
-                .addOnCompleteListener(task -> {
-                    if (webRTCManager != null) {
-                        webRTCManager.endCall();
-                    }
-                    finish();
-                });
+        mIsCameraEnabled = !mIsCameraEnabled;
+        mRtcEngine.muteLocalVideoStream(!mIsCameraEnabled);
+        mToggleCameraButton.setImageResource(mIsCameraEnabled ? R.drawable.ic_camera_on : R.drawable.ic_camera_off);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        stopRingtone();
-        if (callListener != null) {
-            callListener.remove();
+        if (mRtcEngine != null) {
+            mRtcEngine.leaveChannel();
+            RtcEngine.destroy();
+            mRtcEngine = null;
         }
-        if (webRTCManager != null) {
-            webRTCManager.endCall();
-        }
-        statusHandler.removeCallbacksAndMessages(null);
     }
 }

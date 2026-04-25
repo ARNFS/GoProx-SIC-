@@ -36,11 +36,19 @@ public class FirebaseService {
                             List<String> tags = (List<String>) document.get("tags");
                             String imageUrl = document.getString("imageUrl");
 
+                            // Всегда читаем country и city
+                            String country = document.getString("country");
+                            String city = document.getString("city");
+
+                            // Координаты (могут быть null)
+                            Double latitude = document.getDouble("latitude");
+                            Double longitude = document.getDouble("longitude");
+
                             if (tags == null) tags = new ArrayList<>();
                             int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
                             float ratingValue = rating != null ? rating.floatValue() : 0f;
 
-                            // Правильный вызов конструктора: 10 аргументов
+                            // Всегда используем новый конструктор (с country и city)
                             services.add(new Service(
                                     serviceId,
                                     name != null ? name : "Unknown",
@@ -49,9 +57,13 @@ public class FirebaseService {
                                     price != null ? price : "$0",
                                     ratingValue,
                                     ratingCount,
-                                    imageUrl,                           // ← imageUrl из Firestore
+                                    imageUrl,
                                     userId != null ? userId : "",
-                                    tags
+                                    tags,
+                                    latitude != null ? latitude : 0.0,
+                                    longitude != null ? longitude : 0.0,
+                                    country,
+                                    city
                             ));
                         }
                     }
@@ -79,24 +91,46 @@ public class FirebaseService {
                         @SuppressWarnings("unchecked")
                         List<String> tags = (List<String>) document.get("tags");
                         String imageUrl = document.getString("imageUrl");
+                        Double latitude = document.getDouble("latitude");
+                        Double longitude = document.getDouble("longitude");
+                        String country = document.getString("country");
+                        String city = document.getString("city");
 
                         if (tags == null) tags = new ArrayList<>();
                         int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
                         float ratingValue = rating != null ? rating.floatValue() : 0f;
 
-                        // Правильный вызов конструктора
-                        services.add(new Service(
-                                serviceId,
-                                name != null ? name : "Unknown",
-                                profession != null ? profession : "Unknown",
-                                description != null ? description : "",
-                                price != null ? price : "$0",
-                                ratingValue,
-                                ratingCount,
-                                imageUrl,
-                                userId != null ? userId : "",
-                                tags
-                        ));
+                        if (latitude == null || longitude == null) {
+                            services.add(new Service(
+                                    serviceId,
+                                    name != null ? name : "Unknown",
+                                    profession != null ? profession : "Unknown",
+                                    description != null ? description : "",
+                                    price != null ? price : "$0",
+                                    ratingValue,
+                                    ratingCount,
+                                    imageUrl,
+                                    userId != null ? userId : "",
+                                    tags
+                            ));
+                        } else {
+                            services.add(new Service(
+                                    serviceId,
+                                    name != null ? name : "Unknown",
+                                    profession != null ? profession : "Unknown",
+                                    description != null ? description : "",
+                                    price != null ? price : "$0",
+                                    ratingValue,
+                                    ratingCount,
+                                    imageUrl,
+                                    userId != null ? userId : "",
+                                    tags,
+                                    latitude,
+                                    longitude,
+                                    country,
+                                    city
+                            ));
+                        }
                     }
                     callback.onCallback(services);
                 });

@@ -53,10 +53,7 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
         holder.tvPrice.setText(service.getPrice());
         holder.ratingBar.setRating(service.getRating());
 
-        // КРАСНЫЙ цвет профессии
         holder.tvProfession.setTextColor(ContextCompat.getColor(context, R.color.red));
-
-        // Синий цвет описания (остаётся)
         holder.tvDescription.setTextColor(ContextCompat.getColor(context, R.color.blue));
 
         if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
@@ -66,6 +63,26 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
                     .into(holder.ivProfile);
         } else {
             holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+        }
+
+        // Отображение локации
+        String location = "";
+        if (service.getCity() != null && !service.getCity().isEmpty() &&
+                service.getCountry() != null && !service.getCountry().isEmpty()) {
+            location = service.getCity() + ", " + service.getCountry();
+        } else if (service.getCity() != null && !service.getCity().isEmpty()) {
+            location = service.getCity();
+        } else if (service.getCountry() != null && !service.getCountry().isEmpty()) {
+            location = service.getCountry();
+        }
+
+        if (!location.isEmpty()) {
+            holder.tvLocation.setText(location);
+            holder.ivLocation.setVisibility(View.VISIBLE);
+            holder.tvLocation.setVisibility(View.VISIBLE);
+        } else {
+            holder.ivLocation.setVisibility(View.GONE);
+            holder.tvLocation.setVisibility(View.GONE);
         }
 
         holder.itemView.setOnClickListener(v -> {
@@ -86,18 +103,20 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView ivProfile;
-        TextView tvName, tvProfession, tvDescription, tvPrice;
+        ImageView ivProfile, ivLocation;
+        TextView tvName, tvProfession, tvDescription, tvPrice, tvLocation;
         RatingBar ratingBar;
         CardView cardView;
 
         ViewHolder(View itemView) {
             super(itemView);
             ivProfile = itemView.findViewById(R.id.ivServiceImage);
+            ivLocation = itemView.findViewById(R.id.ivLocation);
             tvName = itemView.findViewById(R.id.tvServiceName);
             tvProfession = itemView.findViewById(R.id.tvServiceProfession);
             tvDescription = itemView.findViewById(R.id.tvServiceDescription);
             tvPrice = itemView.findViewById(R.id.tvServicePrice);
+            tvLocation = itemView.findViewById(R.id.tvServiceLocation);
             ratingBar = itemView.findViewById(R.id.ratingBarService);
             cardView = (CardView) itemView;
         }

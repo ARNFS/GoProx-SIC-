@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.Button;
 import android.widget.EditText;
@@ -469,5 +470,15 @@ public class ChatActivity extends BaseActivity{
         super.onDestroy();
         if (msgListener != null) chatRef.removeEventListener(msgListener);
         if (adapter != null) adapter.stopPlaying();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String callLink = intent.getStringExtra("callLink");
+        if (callLink != null) {
+            sendMessage("text", "📞 Join my call: " + callLink, null);
+        }
     }
 }
