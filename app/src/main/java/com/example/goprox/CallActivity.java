@@ -1,20 +1,21 @@
 package com.example.goprox;
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.SurfaceView;
-import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
-import com.google.firebase.auth.FirebaseAuth;
 
 import io.agora.rtc2.ChannelMediaOptions;
 import io.agora.rtc2.Constants;
@@ -22,46 +23,63 @@ import io.agora.rtc2.IRtcEngineEventHandler;
 import io.agora.rtc2.RtcEngine;
 import io.agora.rtc2.RtcEngineConfig;
 import io.agora.rtc2.video.VideoCanvas;
+import io.agora.rtc2.video.VideoEncoderConfiguration;
 
-public class CallActivity extends BaseActivity {
+public class CallActivity extends AppCompatActivity {
 
+    private static final String APP_ID = "fc7f50959be9423aa7e6e37d6723f287";
+    private static final String TOKEN = null; // null for testing
     private static final int PERMISSION_REQ_ID = 22;
-    private static final String APP_ID = "a5179791fb8d43cc8ae79020e60e3360";
 
     private RtcEngine mRtcEngine;
-    private FrameLayout mLocalVideoContainer;
-    private FrameLayout mRemoteVideoContainer;
-    private ImageButton mEndCallButton;
-    private ImageButton mToggleMicButton;
-    private ImageButton mToggleCameraButton;
-    private ImageButton mShareCallButton;
+    private boolean isMuted = false;
+    private boolean isCameraOn = true;
+    private String channelName;
+    private boolean isCaller;
 
-    private String mChannelName;
-    private boolean mIsAudioOnly;
-    private boolean mIsMicEnabled = true;
-    private boolean mIsCameraEnabled = true;
+    private FrameLayout localVideoContainer;
+    private FrameLayout remoteVideoContainer;
+    private ImageButton btnToggleMic, btnToggleCamera, btnEndCall;
+
+    // Sound
+    private MediaPlayer ringtonePlayer;
+    private MediaPlayer callingTonePlayer;
+    private Handler soundHandler = new Handler();
+    private boolean isSoundPlaying = false;
 
     private final IRtcEngineEventHandler mRtcEventHandler = new IRtcEngineEventHandler() {
         @Override
-        public void onJoinChannelSuccess(String channel, int uid, int elapsed) {
-            runOnUiThread(() -> Toast.makeText(CallActivity.this, "Joined channel", Toast.LENGTH_SHORT).show());
-        }
-
-        @Override
         public void onUserJoined(int uid, int elapsed) {
             runOnUiThread(() -> {
-                SurfaceView remoteView = new SurfaceView(CallActivity.this);
-                mRemoteVideoContainer.addView(remoteView);
-                mRtcEngine.setupRemoteVideo(new VideoCanvas(remoteView, VideoCanvas.RENDER_MODE_HIDDEN, uid));
-                Toast.makeText(CallActivity.this, "User joined", Toast.LENGTH_SHORT).show();
+                Toast.makeText(CallActivity.this, "Remote user joined: " + uid, Toast.LENGTH_SHORT).show();
+                setupRemoteVideo(uid);
+                stopAllSounds();
             });
         }
 
         @Override
         public void onUserOffline(int uid, int reason) {
             runOnUiThread(() -> {
-                mRemoteVideoContainer.removeAllViews();
-                Toast.makeText(CallActivity.this, "User left", Toast.LENGTH_SHORT).show();
+                Toast.makeText(CallActivity.this, "Remote user left", Toast.LENGTH_SHORT).show();
+                if (remoteVideoContainer != null) remoteVideoContainer.removeAllViews();
+                playDisconnectSound();
+                new Handler().postDelayed(() -> finish(), 1000);
+            });
+        }
+
+        @Override
+        public void onJoinChannelSuccess(String channel, int uid, int elapsed) {
+            runOnUiThread(() -> {
+                Toast.makeText(CallActivity.this, "Joined channel: " + channel, Toast.LENGTH_SHORT).show();
+                startCallSounds();
+            });
+        }
+
+        @Override
+        public void onError(int err) {
+            runOnUiThread(() -> {
+                Toast.makeText(CallActivity.this, "Agora error: " + err, Toast.LENGTH_LONG).show();
+                stopAllSounds();
             });
         }
     };
@@ -69,147 +87,218 @@ public class CallActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_call);
 
-        mChannelName = getIntent().getStringExtra("channelName");
-        mIsAudioOnly = getIntent().getBooleanExtra("IS_AUDIO_ONLY", false);
+        channelName = getIntent().getStringExtra("channel_name");
+        isCaller = getIntent().getBooleanExtra("is_caller", true);
 
-        if (mChannelName == null) {
-            Toast.makeText(this, "Invalid call data", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
+        if (channelName == null) channelName = "test_channel";
+
+        localVideoContainer = findViewById(R.id.local_video_container);
+        remoteVideoContainer = findViewById(R.id.remote_video_container);
+        btnToggleMic = findViewById(R.id.btn_toggle_mic);
+        btnToggleCamera = findViewById(R.id.btn_toggle_camera);
+        btnEndCall = findViewById(R.id.btn_end_call);
+
+        if (checkPermissions()) {
+            initializeAgora();
         }
 
-        initViews();
-        checkPermissions();
+        btnToggleMic.setOnClickListener(v -> toggleMic());
+        btnToggleCamera.setOnClickListener(v -> toggleCamera());
+        btnEndCall.setOnClickListener(v -> endCall());
     }
 
-    private void initViews() {
-        mLocalVideoContainer = findViewById(R.id.local_video_container);
-        mRemoteVideoContainer = findViewById(R.id.remote_video_container);
-        mEndCallButton = findViewById(R.id.btn_end_call);
-        mToggleMicButton = findViewById(R.id.btn_toggle_mic);
-        mToggleCameraButton = findViewById(R.id.btn_toggle_camera);
-        mShareCallButton = findViewById(R.id.btn_share_call);
-
-        mEndCallButton.setOnClickListener(v -> finish());
-        mToggleMicButton.setOnClickListener(v -> toggleMic());
-        mToggleCameraButton.setOnClickListener(v -> toggleCamera());
-        mShareCallButton.setOnClickListener(v -> shareCallLink());
-
-        if (mIsAudioOnly) {
-            mToggleCameraButton.setVisibility(View.GONE);
-        }
-    }
-
-    private void shareCallLink() {
-        String callLink = "https://agora.io/call/" + mChannelName;
-
-        Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra("callLink", callLink);
-        intent.putExtra("otherUserId", getOtherUserIdFromChannel());
-        startActivity(intent);
-
-        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        android.content.ClipData clip = android.content.ClipData.newPlainText("call link", callLink);
-        clipboard.setPrimaryClip(clip);
-        Toast.makeText(this, "Link copied to clipboard", Toast.LENGTH_SHORT).show();
-    }
-
-    private String getOtherUserIdFromChannel() {
-        String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        String[] parts = mChannelName.split("_");
-        if (parts.length == 2) {
-            return parts[0].equals(currentUserId) ? parts[1] : parts[0];
-        }
-        return "";
-    }
-
-    private void checkPermissions() {
-        String[] permissions = {
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CAMERA
-        };
-
-        boolean allGranted = true;
-        for (String perm : permissions) {
-            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
-                allGranted = false;
-                break;
-            }
-        }
-
-        if (allGranted) {
-            initializeAgoraEngine();
+    // ==================== SOUND METHODS ====================
+    private void startCallSounds() {
+        if (isCaller) {
+            playCallingTone();
         } else {
-            ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQ_ID);
+            playRingtone();
         }
+    }
+
+    private void playRingtone() {
+        try {
+            if (ringtonePlayer != null) ringtonePlayer.release();
+            ringtonePlayer = MediaPlayer.create(this, R.raw.ringtone);
+            if (ringtonePlayer != null) {
+                ringtonePlayer.setLooping(true);
+                ringtonePlayer.start();
+                isSoundPlaying = true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void playCallingTone() {
+        try {
+            if (callingTonePlayer != null) callingTonePlayer.release();
+            callingTonePlayer = MediaPlayer.create(this, R.raw.calling_tone);
+            if (callingTonePlayer != null) {
+                callingTonePlayer.setLooping(true);
+                callingTonePlayer.start();
+                isSoundPlaying = true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void playConnectSound() {
+        try {
+            MediaPlayer mp = MediaPlayer.create(this, R.raw.call_connect);
+            if (mp != null) {
+                mp.start();
+                mp.setOnCompletionListener(MediaPlayer::release);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void playDisconnectSound() {
+        try {
+            MediaPlayer mp = MediaPlayer.create(this, R.raw.call_end_sound);
+            if (mp != null) {
+                mp.start();
+                mp.setOnCompletionListener(MediaPlayer::release);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void stopAllSounds() {
+        isSoundPlaying = false;
+        if (ringtonePlayer != null) {
+            ringtonePlayer.stop();
+            ringtonePlayer.release();
+            ringtonePlayer = null;
+        }
+        if (callingTonePlayer != null) {
+            callingTonePlayer.stop();
+            callingTonePlayer.release();
+            callingTonePlayer = null;
+        }
+        playConnectSound();
+    }
+    // ======================================================
+
+    private boolean checkPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO},
+                    PERMISSION_REQ_ID);
+            return false;
+        }
+        return true;
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQ_ID) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                initializeAgoraEngine();
+            if (grantResults.length > 0 &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED &&
+                    grantResults[1] == PackageManager.PERMISSION_GRANTED) {
+                initializeAgora();
             } else {
-                Toast.makeText(this, "Permissions required", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Camera & microphone permissions are required", Toast.LENGTH_LONG).show();
                 finish();
             }
         }
     }
 
-    private void initializeAgoraEngine() {
+    private void initializeAgora() {
         try {
             RtcEngineConfig config = new RtcEngineConfig();
-            config.mContext = getApplicationContext();
+            config.mContext = getBaseContext();
             config.mAppId = APP_ID;
             config.mEventHandler = mRtcEventHandler;
+
             mRtcEngine = RtcEngine.create(config);
-
             mRtcEngine.enableVideo();
-            mRtcEngine.enableAudio();
 
-            SurfaceView localView = new SurfaceView(this);
-            mLocalVideoContainer.addView(localView);
-            mRtcEngine.setupLocalVideo(new VideoCanvas(localView, VideoCanvas.RENDER_MODE_HIDDEN, 0));
-            mRtcEngine.startPreview();
+            VideoEncoderConfiguration encoderConfig = new VideoEncoderConfiguration();
+            encoderConfig.dimensions = new VideoEncoderConfiguration.VideoDimensions(640, 360);
+            encoderConfig.frameRate = 15;
+            encoderConfig.bitrate = VideoEncoderConfiguration.STANDARD_BITRATE;
+            encoderConfig.orientationMode = VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_PORTRAIT;
+            mRtcEngine.setVideoEncoderConfiguration(encoderConfig);
 
+            setupLocalVideo();
             joinChannel();
+
         } catch (Exception e) {
-            Toast.makeText(this, "Failed to initialize Agora: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
+            Toast.makeText(this, "Agora init failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
         }
+    }
+
+    private void setupLocalVideo() {
+        SurfaceView surfaceView = new SurfaceView(getBaseContext());
+        surfaceView.setZOrderMediaOverlay(true);
+        localVideoContainer.addView(surfaceView);
+
+        VideoCanvas localCanvas = new VideoCanvas(surfaceView, VideoCanvas.RENDER_MODE_HIDDEN, 0);
+        mRtcEngine.setupLocalVideo(localCanvas);
+        mRtcEngine.startPreview();
+    }
+
+    private void setupRemoteVideo(int uid) {
+        remoteVideoContainer.removeAllViews();
+
+        SurfaceView surfaceView = new SurfaceView(getBaseContext());
+        surfaceView.setZOrderMediaOverlay(true);
+        remoteVideoContainer.addView(surfaceView);
+
+        VideoCanvas remoteCanvas = new VideoCanvas(surfaceView, VideoCanvas.RENDER_MODE_HIDDEN, uid);
+        mRtcEngine.setupRemoteVideo(remoteCanvas);
     }
 
     private void joinChannel() {
         ChannelMediaOptions options = new ChannelMediaOptions();
         options.channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION;
         options.clientRoleType = Constants.CLIENT_ROLE_BROADCASTER;
-        options.autoSubscribeAudio = true;
-        options.autoSubscribeVideo = !mIsAudioOnly;
-        options.publishCameraTrack = !mIsAudioOnly;
-        options.publishMicrophoneTrack = true;
 
-        mRtcEngine.joinChannel(null, mChannelName, 0, options);
+        mRtcEngine.joinChannel(TOKEN, channelName, 0, options);
     }
 
     private void toggleMic() {
-        mIsMicEnabled = !mIsMicEnabled;
-        mRtcEngine.muteLocalAudioStream(!mIsMicEnabled);
-        mToggleMicButton.setImageResource(mIsMicEnabled ? R.drawable.ic_mic_on : R.drawable.ic_mic_off);
+        isMuted = !isMuted;
+        mRtcEngine.muteLocalAudioStream(isMuted);
+        btnToggleMic.setImageResource(isMuted ? R.drawable.ic_mic_off : R.drawable.ic_mic_on);
     }
 
     private void toggleCamera() {
-        mIsCameraEnabled = !mIsCameraEnabled;
-        mRtcEngine.muteLocalVideoStream(!mIsCameraEnabled);
-        mToggleCameraButton.setImageResource(mIsCameraEnabled ? R.drawable.ic_camera_on : R.drawable.ic_camera_off);
+        isCameraOn = !isCameraOn;
+        mRtcEngine.muteLocalVideoStream(!isCameraOn);
+        btnToggleCamera.setImageResource(isCameraOn ? R.drawable.ic_camera_on : R.drawable.ic_camera_off);
+    }
+
+    private void endCall() {
+        if (mRtcEngine != null) {
+            mRtcEngine.stopPreview();
+            mRtcEngine.leaveChannel();
+            RtcEngine.destroy();
+            mRtcEngine = null;
+        }
+        playDisconnectSound();
+        finish();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopAllSounds();
         if (mRtcEngine != null) {
+            mRtcEngine.stopPreview();
             mRtcEngine.leaveChannel();
             RtcEngine.destroy();
             mRtcEngine = null;

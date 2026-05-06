@@ -79,9 +79,11 @@
         <activity
             android:name=".CallActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustNothing"
+            android:launchMode="singleTop"
+            android:hardwareAccelerated="true" />
 
     </application>
 </manifest>

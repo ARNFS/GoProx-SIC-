@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
@@ -34,7 +35,8 @@
             android:layout_marginHorizontal="8dp"
             android:background="@drawable/bg_call_button"
             android:src="@drawable/ic_mic_on"
-            android:tint="#FFFFFF" />
+            android:contentDescription="Toggle microphone"
+            app:tint="#FFFFFF" />
 
         <ImageButton
             android:id="@+id/btn_end_call"
@@ -43,7 +45,8 @@
             android:layout_marginHorizontal="8dp"
             android:background="@drawable/bg_end_call_button"
             android:src="@drawable/ic_call_end"
-            android:tint="#FFFFFF" />
+            android:contentDescription="End call"
+            app:tint="#FFFFFF" />
 
         <ImageButton
             android:id="@+id/btn_toggle_camera"
@@ -52,7 +55,8 @@
             android:layout_marginHorizontal="8dp"
             android:background="@drawable/bg_call_button"
             android:src="@drawable/ic_camera_on"
-            android:tint="#FFFFFF" />
+            android:contentDescription="Toggle camera"
+            app:tint="#FFFFFF" />
 
         <ImageButton
             android:id="@+id/btn_share_call"
@@ -61,7 +65,8 @@
             android:layout_marginHorizontal="8dp"
             android:background="@drawable/bg_call_button"
             android:src="@drawable/ic_share"
-            android:tint="#FFFFFF" />
+            android:contentDescription="Share call"
+            app:tint="#FFFFFF" />
 
     </LinearLayout>
 

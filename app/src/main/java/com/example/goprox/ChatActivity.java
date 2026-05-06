@@ -1,18 +1,14 @@
 package com.example.goprox;
 
 import android.Manifest;
-import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.view.View;
-import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.Button;
 import android.widget.EditText;
@@ -23,7 +19,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -53,13 +48,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ChatActivity extends BaseActivity{
+public class ChatActivity extends BaseActivity {
 
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
 
     private RecyclerView recyclerView;
     private EditText etMessage;
-    private ImageButton btnSend, btnAttach, btnBack, btnMic;
+    private ImageButton btnSend, btnAttach, btnBack, btnMic, btnVideoCall;
     private TextView tvUserName;
     private ChatAdapter adapter;
     private final List<ChatMessage> messageList = new ArrayList<>();
@@ -75,6 +70,7 @@ public class ChatActivity extends BaseActivity{
     private static final int PICK_IMAGE = 100;
     private static final int PICK_FILE = 101;
     private Uri fileUri;
+    private boolean isCallActive = false;
 
     private final String FIREBASE_DB_URL = "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app/";
 
@@ -113,6 +109,7 @@ public class ChatActivity extends BaseActivity{
         btnAttach = findViewById(R.id.btnAttach);
         btnBack = findViewById(R.id.btnBack);
         btnMic = findViewById(R.id.btnMic);
+        btnVideoCall = findViewById(R.id.btnVideoCall);
         tvUserName = findViewById(R.id.tvUserName);
 
         adapter = new ChatAdapter(messageList, currentUserId);
@@ -125,6 +122,78 @@ public class ChatActivity extends BaseActivity{
         btnBack.setOnClickListener(v -> finish());
         btnAttach.setOnClickListener(v -> showAttachmentDialog());
         btnMic.setOnClickListener(v -> checkAndStartVoiceRecording());
+
+        // ========== VIDEO CALL BUTTON (CALLER) ==========
+        btnVideoCall.setOnClickListener(v -> {
+            // Save call info to Firebase Realtime Database
+            DatabaseReference callRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                    .getReference("calls").child(chatId);
+            Map<String, Object> callData = new HashMap<>();
+            callData.put("callerId", currentUserId);
+            callData.put("receiverId", otherUserId);
+            callData.put("channelName", chatId);
+            callData.put("timestamp", System.currentTimeMillis());
+            callData.put("status", "ringing");
+            callRef.setValue(callData);
+
+            // Send a "call" message in the chat
+            sendMessage("call", "📞 Video call started", null);
+
+            // Open CallActivity as CALLER
+            Intent intent = new Intent(ChatActivity.this, CallActivity.class);
+            intent.putExtra("channel_name", chatId);
+            intent.putExtra("is_caller", true);
+            startActivity(intent);
+        });
+    }
+
+    private void listenForIncomingCalls() {
+        DatabaseReference callRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                .getReference("calls").child(chatId);
+
+        callRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!snapshot.exists() || isCallActive) return;
+
+                String status = snapshot.child("status").getValue(String.class);
+                String callerId = snapshot.child("callerId").getValue(String.class);
+                String channelName = snapshot.child("channelName").getValue(String.class);
+
+                if ("ringing".equals(status) && !callerId.equals(currentUserId)) {
+                    showIncomingCallDialog(channelName);
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(ChatActivity.this, "Call listener error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void showIncomingCallDialog(String channelName) {
+        new AlertDialog.Builder(this)
+                .setTitle("📹 Incoming Video Call")
+                .setMessage("Someone is calling you...")
+                .setPositiveButton("Accept", (dialog, which) -> {
+                    isCallActive = true;
+                    Intent intent = new Intent(ChatActivity.this, CallActivity.class);
+                    intent.putExtra("channel_name", channelName);
+                    intent.putExtra("is_caller", false);
+                    startActivity(intent);
+
+                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                            .getReference("calls").child(chatId)
+                            .child("status").setValue("active");
+                })
+                .setNegativeButton("Decline", (dialog, which) -> {
+                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                            .getReference("calls").child(chatId)
+                            .removeValue();
+                })
+                .setCancelable(false)
+                .show();
     }
 
     private void checkAndStartVoiceRecording() {
@@ -239,6 +308,15 @@ public class ChatActivity extends BaseActivity{
                     messageList.add(msg);
                     adapter.notifyItemInserted(messageList.size() - 1);
                     recyclerView.smoothScrollToPosition(messageList.size() - 1);
+
+                    // Auto-join call if it's a "call" message and I'm the receiver
+                    if ("call".equals(msg.getType()) && !msg.getSenderId().equals(currentUserId) && !isCallActive) {
+                        isCallActive = true;
+                        Intent intent = new Intent(ChatActivity.this, CallActivity.class);
+                        intent.putExtra("channel_name", chatId);
+                        intent.putExtra("is_caller", false);
+                        startActivity(intent);
+                    }
                 }
             }
             @Override public void onChildChanged(@NonNull DataSnapshot snapshot, String prev) {}
@@ -249,6 +327,9 @@ public class ChatActivity extends BaseActivity{
             }
         };
         query.addChildEventListener(msgListener);
+
+        // Also listen for calls via the separate "calls" node
+        listenForIncomingCalls();
     }
 
     private void sendTextMessage() {
@@ -366,31 +447,23 @@ public class ChatActivity extends BaseActivity{
                 });
     }
 
-    // --------------------------------------------------------------
-    // НОВЫЙ МЕТОД: скачать и открыть файл по HTTPS-ссылке
-    // --------------------------------------------------------------
     public void openFile(String fileUrl) {
         if (fileUrl == null || fileUrl.isEmpty()) {
             Toast.makeText(this, "Invalid file URL", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Сначала пробуем открыть напрямую по URL
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(Uri.parse(fileUrl), getMimeTypeFromUrl(fileUrl));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-        // Проверяем, есть ли приложение, которое может обработать такой Intent
         if (intent.resolveActivity(getPackageManager()) != null) {
             try {
                 startActivity(Intent.createChooser(intent, "Open with"));
-                return; // Успешно открыли, выходим
-            } catch (ActivityNotFoundException ignored) {
-                // Если не получилось – идём дальше к скачиванию
-            }
+                return;
+            } catch (ActivityNotFoundException ignored) {}
         }
 
-        // Если напрямую не получилось – скачиваем и открываем локально
         Toast.makeText(this, "Downloading file...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
@@ -421,7 +494,6 @@ public class ChatActivity extends BaseActivity{
         }).start();
     }
 
-    // Вспомогательный метод: определяет MIME по расширению в URL
     private String getMimeTypeFromUrl(String url) {
         String extension = MimeTypeMap.getFileExtensionFromUrl(url);
         if (extension != null) {
@@ -429,6 +501,7 @@ public class ChatActivity extends BaseActivity{
         }
         return "*/*";
     }
+
     private void openLocalFile(File file) {
         if (!file.exists()) {
             Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show();
@@ -463,7 +536,12 @@ public class ChatActivity extends BaseActivity{
         }
         return null;
     }
-    // --------------------------------------------------------------
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        isCallActive = false;
+    }
 
     @Override
     protected void onDestroy() {

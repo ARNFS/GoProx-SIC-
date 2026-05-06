@@ -111,7 +111,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // Agora Video SDK
-    implementation("io.agora.rtc:full-sdk:4.5.0")
+    implementation("io.agora.rtc:full-sdk:4.3.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
