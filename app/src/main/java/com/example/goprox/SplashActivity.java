@@ -3,25 +3,18 @@ package com.example.goprox;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.widget.Toast;
+import android.os.Looper;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-
-import androidx.annotation.NonNull;
 
 public class SplashActivity extends AppCompatActivity {
 
     private FirebaseAuth mAuth;
-    private DatabaseReference callsRef;
-    private ValueEventListener callListener;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable navigateRunnable = this::checkUserStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,78 +22,39 @@ public class SplashActivity extends AppCompatActivity {
         setContentView(R.layout.activity_splash);
 
         mAuth = FirebaseAuth.getInstance();
-
-        // 1 վայրկյան հետո ստուգենք user-ի վիճակը
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                checkUserStatus();
-            }
-        }, 1000);
+        handler.postDelayed(navigateRunnable, 1000);
     }
 
     private void checkUserStatus() {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
+        try {
+            FirebaseUser currentUser = mAuth.getCurrentUser();
+            Intent intent;
 
-        if (currentUser != null) {
-            // ✅ 6-րդ քայլ – Start listening for incoming calls
-            startCallInvitationListener(currentUser.getUid());
-
-            // User signed in - check if email verified
-            if (currentUser.isEmailVerified()) {
-                // Email verified - go to Home
-                startActivity(new Intent(SplashActivity.this, HomeActivity.class));
-            } else {
-                // Email not verified - go to VerifyEmail
-                startActivity(new Intent(SplashActivity.this, VerifyEmailActivity.class));
-            }
-        } else {
-            // No user - go to Login
-            startActivity(new Intent(SplashActivity.this, LoginActivity.class));
-        }
-
-        // Close SplashActivity
-        finish();
-    }
-
-    // ============================================================
-    // 6-րդ ՔԱՅԼ – Listen for incoming call invitations
-    // ============================================================
-    private void startCallInvitationListener(String userId) {
-        callsRef = FirebaseDatabase.getInstance().getReference("calls").child(userId);
-        callListener = new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.exists()) {
-                    String channelName = snapshot.child("channelName").getValue(String.class);
-                    String callerName = snapshot.child("callerName").getValue(String.class);
-
-                    // Open CallActivity when an invitation is received
-                    Intent intent = new Intent(SplashActivity.this, CallActivity.class);
-                    intent.putExtra("channelName", channelName);
-                    intent.putExtra("callerName", callerName);
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
-
-                    // Remove invitation after reading
-                    snapshot.getRef().removeValue();
+            if (currentUser != null) {
+                if (currentUser.isEmailVerified()) {
+                    intent = new Intent(this, HomeActivity.class);
+                } else {
+                    intent = new Intent(this, VerifyEmailActivity.class);
                 }
+            } else {
+                intent = new Intent(this, LoginActivity.class);
             }
 
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                // Handle error (optional)
-            }
-        };
-        callsRef.addValueEventListener(callListener);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+        } catch (Exception e) {
+            // Fallback to login on error
+            Intent intent = new Intent(this, LoginActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Remove listener to avoid memory leaks
-        if (callsRef != null && callListener != null) {
-            callsRef.removeEventListener(callListener);
-        }
+        handler.removeCallbacks(navigateRunnable);
     }
 }

@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -22,14 +23,26 @@ public class NotFoundActivity extends AppCompatActivity {
         btnBrowseAll = findViewById(R.id.btnBrowseAll);
         btnGoBack = findViewById(R.id.btnGoBack);
 
+        if (btnBrowseAll == null || btnGoBack == null) {
+            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
         String problem = getIntent().getStringExtra("problem");
         String profession = getIntent().getStringExtra("profession");
 
-        if (problem != null) tvProblem.setText("Problem: " + problem);
-        if (profession != null) tvProfession.setText("Needed: " + profession);
+        if (tvProblem != null && problem != null) {
+            tvProblem.setText("Problem: " + problem);
+        }
+        if (tvProfession != null && profession != null) {
+            tvProfession.setText("Needed: " + profession);
+        }
 
         btnBrowseAll.setOnClickListener(v -> {
-            startActivity(new Intent(this, HomeActivity.class));
+            try {
+                startActivity(new Intent(this, HomeActivity.class));
+            } catch (Exception ignored) {}
             finish();
         });
 

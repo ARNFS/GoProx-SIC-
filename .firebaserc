@@ -1,5 +1,8 @@
 {
   "projects": {
+    "1": "myappproject-442cf",
     "default": "myappproject-442cf"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

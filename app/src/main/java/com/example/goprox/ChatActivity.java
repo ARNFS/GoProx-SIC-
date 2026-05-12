@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.Button;
@@ -51,10 +52,12 @@ import java.util.Map;
 public class ChatActivity extends BaseActivity {
 
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
+    private static final int PICK_IMAGE = 100;
+    private static final int PICK_FILE = 101;
 
     private RecyclerView recyclerView;
     private EditText etMessage;
-    private ImageButton btnSend, btnAttach, btnBack, btnMic, btnVideoCall;
+    private ImageButton btnSend, btnAttach, btnBack, btnMic;
     private TextView tvUserName;
     private ChatAdapter adapter;
     private final List<ChatMessage> messageList = new ArrayList<>();
@@ -62,17 +65,16 @@ public class ChatActivity extends BaseActivity {
     private ChildEventListener msgListener;
     private AudioRecorder audioRecorder;
     private String currentAudioFile;
-    private boolean isRecordingAudio = false;
+    private volatile boolean isRecordingAudio = false;
     private AlertDialog recordingDialog;
     private TextView tvRecordingTime;
+    private Handler recordingHandler;
 
     private String chatId, otherUserId, currentUserId;
-    private static final int PICK_IMAGE = 100;
-    private static final int PICK_FILE = 101;
     private Uri fileUri;
-    private boolean isCallActive = false;
 
-    private final String FIREBASE_DB_URL = "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app/";
+    private final String FIREBASE_DB_URL =
+            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,9 +90,18 @@ public class ChatActivity extends BaseActivity {
             return;
         }
 
-        currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        chatId = (currentUserId.compareTo(otherUserId) < 0) ?
-                currentUserId + "_" + otherUserId : otherUserId + "_" + currentUserId;
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() == null) {
+            Toast.makeText(this, "Please sign in", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        currentUserId = auth.getCurrentUser().getUid();
+        chatId = (currentUserId.compareTo(otherUserId) < 0)
+                ? currentUserId + "_" + otherUserId
+                : otherUserId + "_" + currentUserId;
+
+        recordingHandler = new Handler(Looper.getMainLooper());
 
         initViews();
         if (otherUserName != null && !otherUserName.isEmpty()) {
@@ -109,8 +120,13 @@ public class ChatActivity extends BaseActivity {
         btnAttach = findViewById(R.id.btnAttach);
         btnBack = findViewById(R.id.btnBack);
         btnMic = findViewById(R.id.btnMic);
-        btnVideoCall = findViewById(R.id.btnVideoCall);
         tvUserName = findViewById(R.id.tvUserName);
+
+        if (recyclerView == null || btnSend == null || etMessage == null) {
+            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
         adapter = new ChatAdapter(messageList, currentUserId);
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
@@ -122,80 +138,9 @@ public class ChatActivity extends BaseActivity {
         btnBack.setOnClickListener(v -> finish());
         btnAttach.setOnClickListener(v -> showAttachmentDialog());
         btnMic.setOnClickListener(v -> checkAndStartVoiceRecording());
-
-        // ========== VIDEO CALL BUTTON (CALLER) ==========
-        btnVideoCall.setOnClickListener(v -> {
-            // Save call info to Firebase Realtime Database
-            DatabaseReference callRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                    .getReference("calls").child(chatId);
-            Map<String, Object> callData = new HashMap<>();
-            callData.put("callerId", currentUserId);
-            callData.put("receiverId", otherUserId);
-            callData.put("channelName", chatId);
-            callData.put("timestamp", System.currentTimeMillis());
-            callData.put("status", "ringing");
-            callRef.setValue(callData);
-
-            // Send a "call" message in the chat
-            sendMessage("call", "📞 Video call started", null);
-
-            // Open CallActivity as CALLER
-            Intent intent = new Intent(ChatActivity.this, CallActivity.class);
-            intent.putExtra("channel_name", chatId);
-            intent.putExtra("is_caller", true);
-            startActivity(intent);
-        });
     }
 
-    private void listenForIncomingCalls() {
-        DatabaseReference callRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("calls").child(chatId);
-
-        callRef.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (!snapshot.exists() || isCallActive) return;
-
-                String status = snapshot.child("status").getValue(String.class);
-                String callerId = snapshot.child("callerId").getValue(String.class);
-                String channelName = snapshot.child("channelName").getValue(String.class);
-
-                if ("ringing".equals(status) && !callerId.equals(currentUserId)) {
-                    showIncomingCallDialog(channelName);
-                }
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(ChatActivity.this, "Call listener error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private void showIncomingCallDialog(String channelName) {
-        new AlertDialog.Builder(this)
-                .setTitle("📹 Incoming Video Call")
-                .setMessage("Someone is calling you...")
-                .setPositiveButton("Accept", (dialog, which) -> {
-                    isCallActive = true;
-                    Intent intent = new Intent(ChatActivity.this, CallActivity.class);
-                    intent.putExtra("channel_name", channelName);
-                    intent.putExtra("is_caller", false);
-                    startActivity(intent);
-
-                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                            .getReference("calls").child(chatId)
-                            .child("status").setValue("active");
-                })
-                .setNegativeButton("Decline", (dialog, which) -> {
-                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                            .getReference("calls").child(chatId)
-                            .removeValue();
-                })
-                .setCancelable(false)
-                .show();
-    }
-
+    // ================== VOICE RECORDING ==================
     private void checkAndStartVoiceRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -208,14 +153,17 @@ public class ChatActivity extends BaseActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startVoiceRecording();
             } else {
-                Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,
+                        "Microphone permission is required", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -228,7 +176,8 @@ public class ChatActivity extends BaseActivity {
             Toast.makeText(this, "Cannot access storage", Toast.LENGTH_SHORT).show();
             return;
         }
-        currentAudioFile = cacheDir.getAbsolutePath() + "/voice_" + System.currentTimeMillis() + ".m4a";
+        currentAudioFile = cacheDir.getAbsolutePath()
+                + "/voice_" + System.currentTimeMillis() + ".m4a";
 
         try {
             audioRecorder.startRecording(currentAudioFile, amplitude -> {});
@@ -240,22 +189,27 @@ public class ChatActivity extends BaseActivity {
     }
 
     private void showRecordingDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = getLayoutInflater().inflate(R.layout.dialog_recording, null);
-        tvRecordingTime = view.findViewById(R.id.tvRecordingTime);
-        Button btnStop = view.findViewById(R.id.btnStopRecording);
+        try {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            View view = getLayoutInflater().inflate(R.layout.dialog_recording, null);
+            if (view == null) return;
 
-        recordingDialog = builder.setView(view).setCancelable(false).create();
-        recordingDialog.show();
+            tvRecordingTime = view.findViewById(R.id.tvRecordingTime);
+            Button btnStop = view.findViewById(R.id.btnStopRecording);
 
-        btnStop.setOnClickListener(v -> stopVoiceRecording());
-        startRecordingTimer();
+            recordingDialog = builder.setView(view).setCancelable(false).create();
+            recordingDialog.show();
+
+            btnStop.setOnClickListener(v -> stopVoiceRecording());
+            startRecordingTimer();
+        } catch (Exception e) {
+            Toast.makeText(this, "Recording dialog error", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void startRecordingTimer() {
         final long[] startTime = {System.currentTimeMillis()};
-        Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
+        recordingHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 if (isRecordingAudio && tvRecordingTime != null) {
@@ -264,7 +218,7 @@ public class ChatActivity extends BaseActivity {
                     long minutes = seconds / 60;
                     seconds = seconds % 60;
                     tvRecordingTime.setText(String.format("%02d:%02d", minutes, seconds));
-                    handler.postDelayed(this, 1000);
+                    recordingHandler.postDelayed(this, 1000);
                 }
             }
         }, 0);
@@ -274,131 +228,167 @@ public class ChatActivity extends BaseActivity {
         if (audioRecorder != null && isRecordingAudio) {
             audioRecorder.stopRecording();
             isRecordingAudio = false;
-
-            if (recordingDialog != null) recordingDialog.dismiss();
-
-            fileUri = Uri.fromFile(new File(currentAudioFile));
-            uploadFileAndSend("voice");
+            if (recordingDialog != null && recordingDialog.isShowing()) {
+                try {
+                    recordingDialog.dismiss();
+                } catch (Exception ignored) {}
+            }
+            File audioFile = new File(currentAudioFile);
+            if (audioFile.exists()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    fileUri = FileProvider.getUriForFile(this,
+                            getPackageName() + ".fileprovider", audioFile);
+                } else {
+                    fileUri = Uri.fromFile(audioFile);
+                }
+                uploadFileAndSend("voice");
+            }
         }
     }
 
+    // ================== FIREBASE ==================
     private void loadReceiverName() {
-        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("users").child(otherUserId).child("name")
-                .addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot snapshot) {
-                        String name = snapshot.getValue(String.class);
-                        if (name != null) tvUserName.setText(name);
-                    }
-                    @Override public void onCancelled(@NonNull DatabaseError error) {}
-                });
+        try {
+            FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                    .getReference("users").child(otherUserId).child("name")
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            String name = snapshot.getValue(String.class);
+                            if (name != null && tvUserName != null) {
+                                tvUserName.setText(name);
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {}
+                    });
+        } catch (Exception ignored) {}
     }
 
     private void setupFirebase() {
-        chatRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("chats").child(chatId).child("messages");
-        Query query = chatRef.orderByKey().limitToLast(50);
+        try {
+            chatRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                    .getReference("chats").child(chatId).child("messages");
+            Query query = chatRef.orderByKey().limitToLast(50);
 
-        msgListener = new ChildEventListener() {
-            @Override
-            public void onChildAdded(@NonNull DataSnapshot snapshot, String prev) {
-                ChatMessage msg = snapshot.getValue(ChatMessage.class);
-                if (msg != null) {
-                    messageList.add(msg);
-                    adapter.notifyItemInserted(messageList.size() - 1);
-                    recyclerView.smoothScrollToPosition(messageList.size() - 1);
-
-                    // Auto-join call if it's a "call" message and I'm the receiver
-                    if ("call".equals(msg.getType()) && !msg.getSenderId().equals(currentUserId) && !isCallActive) {
-                        isCallActive = true;
-                        Intent intent = new Intent(ChatActivity.this, CallActivity.class);
-                        intent.putExtra("channel_name", chatId);
-                        intent.putExtra("is_caller", false);
-                        startActivity(intent);
+            msgListener = new ChildEventListener() {
+                @Override
+                public void onChildAdded(@NonNull DataSnapshot snapshot, String prev) {
+                    ChatMessage msg = snapshot.getValue(ChatMessage.class);
+                    if (msg != null && adapter != null) {
+                        messageList.add(msg);
+                        adapter.notifyItemInserted(messageList.size() - 1);
+                        if (recyclerView != null) {
+                            recyclerView.smoothScrollToPosition(messageList.size() - 1);
+                        }
                     }
                 }
-            }
-            @Override public void onChildChanged(@NonNull DataSnapshot snapshot, String prev) {}
-            @Override public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
-            @Override public void onChildMoved(@NonNull DataSnapshot snapshot, String prev) {}
-            @Override public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(ChatActivity.this, "Failed to load messages", Toast.LENGTH_SHORT).show();
-            }
-        };
-        query.addChildEventListener(msgListener);
 
-        // Also listen for calls via the separate "calls" node
-        listenForIncomingCalls();
+                @Override
+                public void onChildChanged(@NonNull DataSnapshot s, String p) {}
+
+                @Override
+                public void onChildRemoved(@NonNull DataSnapshot s) {}
+
+                @Override
+                public void onChildMoved(@NonNull DataSnapshot s, String p) {}
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    Toast.makeText(ChatActivity.this,
+                            "Failed to load messages", Toast.LENGTH_SHORT).show();
+                }
+            };
+            query.addChildEventListener(msgListener);
+        } catch (Exception e) {
+            Toast.makeText(this, "Chat initialization error", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void sendTextMessage() {
+        if (etMessage == null) return;
         String text = etMessage.getText().toString().trim();
         if (text.isEmpty()) return;
         sendMessage("text", text, null);
     }
 
     private void sendMessage(String type, String content, String fileUrl) {
+        if (chatRef == null || currentUserId == null) return;
+
         String msgId = chatRef.push().getKey();
+        if (msgId == null) return;
+
         long timestamp = System.currentTimeMillis();
-        ChatMessage msg = new ChatMessage(msgId, currentUserId, content, type, fileUrl, timestamp);
+        ChatMessage msg = new ChatMessage(msgId, currentUserId,
+                content, type, fileUrl, timestamp);
 
         chatRef.child(msgId).setValue(msg)
                 .addOnSuccessListener(aVoid -> {
-                    etMessage.setText("");
+                    if (etMessage != null) etMessage.setText("");
                     updateChatMeta(content, timestamp, type);
                 });
     }
 
     private void updateChatMeta(String lastMsg, long timestamp, String type) {
-        DatabaseReference userChatsRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("user_chats");
-        Map<String, Object> updates = new HashMap<>();
+        try {
+            DatabaseReference userChatsRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                    .getReference("user_chats");
+            Map<String, Object> updates = new HashMap<>();
 
-        updates.put(currentUserId + "/" + otherUserId + "/lastMessage", lastMsg);
-        updates.put(currentUserId + "/" + otherUserId + "/timestamp", timestamp);
-        updates.put(currentUserId + "/" + otherUserId + "/chatId", chatId);
-        updates.put(currentUserId + "/" + otherUserId + "/lastMessageType", type);
+            updates.put(currentUserId + "/" + otherUserId + "/lastMessage", lastMsg);
+            updates.put(currentUserId + "/" + otherUserId + "/timestamp", timestamp);
+            updates.put(currentUserId + "/" + otherUserId + "/chatId", chatId);
+            updates.put(currentUserId + "/" + otherUserId + "/lastMessageType", type);
 
-        Map<String, Object> otherUpdates = new HashMap<>();
-        otherUpdates.put("lastMessage", lastMsg);
-        otherUpdates.put("timestamp", timestamp);
-        otherUpdates.put("chatId", chatId);
-        otherUpdates.put("lastMessageType", type);
-        otherUpdates.put("unreadCount", ServerValue.increment(1));
-        updates.put(otherUserId + "/" + currentUserId, otherUpdates);
+            Map<String, Object> otherUpdates = new HashMap<>();
+            otherUpdates.put("lastMessage", lastMsg);
+            otherUpdates.put("timestamp", timestamp);
+            otherUpdates.put("chatId", chatId);
+            otherUpdates.put("lastMessageType", type);
+            otherUpdates.put("unreadCount", ServerValue.increment(1));
+            updates.put(otherUserId + "/" + currentUserId, otherUpdates);
 
-        userChatsRef.updateChildren(updates);
+            userChatsRef.updateChildren(updates);
+        } catch (Exception ignored) {}
     }
 
     private void markMessagesAsRead() {
-        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("user_chats")
-                .child(currentUserId)
-                .child(otherUserId)
-                .child("unreadCount")
-                .setValue(0);
+        try {
+            FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                    .getReference("user_chats")
+                    .child(currentUserId)
+                    .child(otherUserId)
+                    .child("unreadCount")
+                    .setValue(0);
+        } catch (Exception ignored) {}
     }
 
+    // ================== ATTACHMENTS ==================
     private void showAttachmentDialog() {
-        String[] options = {"Image", "File"};
-        new AlertDialog.Builder(this)
-                .setTitle("Attach")
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        Intent intent = new Intent(Intent.ACTION_PICK);
-                        intent.setType("image/*");
-                        startActivityForResult(intent, PICK_IMAGE);
-                    } else {
-                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                        intent.setType("*/*");
-                        startActivityForResult(intent, PICK_FILE);
-                    }
-                }).show();
+        try {
+            String[] options = {"Image", "File"};
+            new AlertDialog.Builder(this)
+                    .setTitle("Attach")
+                    .setItems(options, (dialog, which) -> {
+                        if (which == 0) {
+                            Intent intent = new Intent(Intent.ACTION_PICK);
+                            intent.setType("image/*");
+                            startActivityForResult(intent, PICK_IMAGE);
+                        } else {
+                            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                            intent.setType("*/*");
+                            startActivityForResult(intent, PICK_FILE);
+                        }
+                    }).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Attachment error", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode,
+                                    @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null && data.getData() != null) {
             fileUri = data.getData();
@@ -408,11 +398,11 @@ public class ChatActivity extends BaseActivity {
 
     private void uploadFileAndSend(String messageType) {
         if (fileUri == null) return;
-
         Toast.makeText(this, "Uploading...", Toast.LENGTH_SHORT).show();
 
-        String fileName = System.currentTimeMillis() + "_" +
-                (fileUri.getLastPathSegment() != null ? fileUri.getLastPathSegment() : "file");
+        String fileName = System.currentTimeMillis() + "_"
+                + (fileUri.getLastPathSegment() != null
+                ? fileUri.getLastPathSegment() : "file");
 
         StorageReference storageRef = FirebaseStorage.getInstance()
                 .getReference("chat_attachments")
@@ -420,14 +410,12 @@ public class ChatActivity extends BaseActivity {
                 .child(fileName);
 
         storageRef.putFile(fileUri)
-                .addOnProgressListener(taskSnapshot -> {
-                    double progress = (100.0 * taskSnapshot.getBytesTransferred()) / taskSnapshot.getTotalByteCount();
-                    if (progress % 20 == 0) {
-                        Toast.makeText(this, "Uploading: " + (int)progress + "%", Toast.LENGTH_SHORT).show();
-                    }
-                })
                 .continueWithTask(task -> {
-                    if (!task.isSuccessful()) throw task.getException();
+                    if (!task.isSuccessful()) {
+                        throw task.getException() != null
+                                ? task.getException()
+                                : new Exception("Upload failed");
+                    }
                     return storageRef.getDownloadUrl();
                 })
                 .addOnCompleteListener(task -> {
@@ -436,13 +424,16 @@ public class ChatActivity extends BaseActivity {
                         String displayName = fileUri.getLastPathSegment();
                         String finalType = messageType;
                         if ("file".equals(messageType)) {
-                            finalType = fileUri.toString().contains("image") ? "image" : "file";
+                            finalType = (fileUri.toString().contains("image"))
+                                    ? "image" : "file";
                         }
                         sendMessage(finalType, displayName, downloadUrl);
                         Toast.makeText(this, "Upload successful", Toast.LENGTH_SHORT).show();
                     } else {
                         Exception e = task.getException();
-                        Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this,
+                                "Upload failed: " + (e != null ? e.getMessage() : "Unknown error"),
+                                Toast.LENGTH_LONG).show();
                     }
                 });
     }
@@ -469,94 +460,102 @@ public class ChatActivity extends BaseActivity {
             try {
                 URL url = new URL(fileUrl);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
                 connection.connect();
 
-                String fileName = Uri.parse(fileUrl).getLastPathSegment();
-                if (fileName == null || !fileName.contains(".")) {
-                    fileName = "file_" + System.currentTimeMillis();
-                }
+                String fName = Uri.parse(fileUrl).getLastPathSegment();
+                if (fName == null || !fName.contains("."))
+                    fName = "file_" + System.currentTimeMillis();
 
-                File tempFile = new File(getCacheDir(), fileName);
+                File tempFile = new File(getCacheDir(), fName);
                 try (InputStream input = connection.getInputStream();
-                     FileOutputStream output = new FileOutputStream(tempFile)) {
+                     FileOutputStream out = new FileOutputStream(tempFile)) {
                     byte[] buffer = new byte[4096];
                     int bytesRead;
-                    while ((bytesRead = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, bytesRead);
-                    }
+                    while ((bytesRead = input.read(buffer)) != -1)
+                        out.write(buffer, 0, bytesRead);
                 }
                 connection.disconnect();
-
                 runOnUiThread(() -> openLocalFile(tempFile));
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(this,
+                        "Download failed: " + e.getMessage(),
+                        Toast.LENGTH_LONG).show());
             }
         }).start();
     }
 
     private String getMimeTypeFromUrl(String url) {
-        String extension = MimeTypeMap.getFileExtensionFromUrl(url);
-        if (extension != null) {
-            return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
-        }
+        try {
+            String ext = MimeTypeMap.getFileExtensionFromUrl(url);
+            if (ext != null)
+                return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
+        } catch (Exception ignored) {}
         return "*/*";
     }
 
     private void openLocalFile(File file) {
-        if (!file.exists()) {
+        if (file == null || !file.exists()) {
             Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        Uri fileUri;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            fileUri = FileProvider.getUriForFile(this,
-                    getPackageName() + ".fileprovider", file);
-        } else {
-            fileUri = Uri.fromFile(file);
-        }
-
-        String mimeType = getMimeType(file);
-        if (mimeType == null) mimeType = "*/*";
-
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(fileUri, mimeType);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
+            Uri uri;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                uri = FileProvider.getUriForFile(this,
+                        getPackageName() + ".fileprovider", file);
+            } else {
+                uri = Uri.fromFile(file);
+            }
+            String mimeType = getMimeType(file);
+            if (mimeType == null) mimeType = "*/*";
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, mimeType);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(intent, "Open with"));
         } catch (ActivityNotFoundException e) {
             Toast.makeText(this, "No app found to open this file", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error opening file", Toast.LENGTH_SHORT).show();
         }
     }
 
     private String getMimeType(File file) {
-        String extension = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath());
-        if (extension != null) {
-            return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
-        }
+        try {
+            String ext = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath());
+            if (ext != null)
+                return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
+        } catch (Exception ignored) {}
         return null;
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        isCallActive = false;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (msgListener != null) chatRef.removeEventListener(msgListener);
-        if (adapter != null) adapter.stopPlaying();
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        String callLink = intent.getStringExtra("callLink");
-        if (callLink != null) {
-            sendMessage("text", "📞 Join my call: " + callLink, null);
+        if (msgListener != null && chatRef != null) {
+            try {
+                chatRef.removeEventListener(msgListener);
+            } catch (Exception ignored) {}
+        }
+        if (adapter != null) {
+            try {
+                adapter.stopPlaying();
+            } catch (Exception ignored) {}
+        }
+        if (audioRecorder != null && isRecordingAudio) {
+            try {
+                audioRecorder.stopRecording();
+            } catch (Exception ignored) {}
+        }
+        if (recordingDialog != null && recordingDialog.isShowing()) {
+            try {
+                recordingDialog.dismiss();
+            } catch (Exception ignored) {}
+        }
+        if (recordingHandler != null) {
+            recordingHandler.removeCallbacksAndMessages(null);
         }
     }
 }

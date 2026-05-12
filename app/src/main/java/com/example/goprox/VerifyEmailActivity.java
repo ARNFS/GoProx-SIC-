@@ -8,19 +8,17 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-public class VerifyEmailActivity extends BaseActivity{
+public class VerifyEmailActivity extends BaseActivity {
 
-    Button btnResend, btnCheck, btnLogout;
-    TextView tvInfo, tvEmail;
-    ProgressBar pbLoading;
+    private Button btnResend, btnCheck, btnLogout;
+    private TextView tvInfo, tvEmail;
+    private ProgressBar pbLoading;
 
-    FirebaseAuth mAuth;
-    FirebaseUser user;
+    private FirebaseAuth mAuth;
+    private FirebaseUser user;
 
     private Handler handler = new Handler();
     private Runnable autoCheckRunnable;
@@ -37,20 +35,23 @@ public class VerifyEmailActivity extends BaseActivity{
         tvEmail = findViewById(R.id.tvEmail);
         pbLoading = findViewById(R.id.pbLoading);
 
-        mAuth = FirebaseAuth.getInstance();
-        user = mAuth.getCurrentUser();
-
-        if (user == null) {
-            // No user, go to login
-            startActivity(new Intent(this, LoginActivity.class));
+        if (btnResend == null || btnCheck == null || btnLogout == null ||
+                tvEmail == null || pbLoading == null) {
+            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // Show user email
-        tvEmail.setText(user.getEmail());
+        mAuth = FirebaseAuth.getInstance();
+        user = mAuth.getCurrentUser();
 
-        // Auto-check every 5 seconds
+        if (user == null) {
+            goToLogin();
+            return;
+        }
+
+        tvEmail.setText(user.getEmail() != null ? user.getEmail() : "No email");
+
         startAutoCheck();
 
         btnResend.setOnClickListener(v -> resendVerificationEmail());
@@ -62,19 +63,16 @@ public class VerifyEmailActivity extends BaseActivity{
         autoCheckRunnable = new Runnable() {
             @Override
             public void run() {
-                if (user != null) {
-                    user.reload().addOnCompleteListener(task -> {
-                        if (user.isEmailVerified()) {
-                            // Email verified - go to home
-                            Toast.makeText(VerifyEmailActivity.this,
-                                    "Email verified! Redirecting...", Toast.LENGTH_SHORT).show();
-                            goToHome();
-                        } else {
-                            // Not verified yet - check again after 5 seconds
-                            handler.postDelayed(this, 5000);
-                        }
-                    });
-                }
+                if (user == null) return;
+                user.reload().addOnCompleteListener(task -> {
+                    if (user.isEmailVerified()) {
+                        Toast.makeText(VerifyEmailActivity.this,
+                                "Email verified! Redirecting...", Toast.LENGTH_SHORT).show();
+                        goToHome();
+                    } else {
+                        handler.postDelayed(this, 5000);
+                    }
+                });
             }
         };
         handler.postDelayed(autoCheckRunnable, 5000);
@@ -90,13 +88,16 @@ public class VerifyEmailActivity extends BaseActivity{
                 Toast.makeText(this,
                         "Verification email sent to " + user.getEmail(),
                         Toast.LENGTH_LONG).show();
-                tvInfo.setText("Check your email and click the verification link");
+                if (tvInfo != null) {
+                    tvInfo.setText("Check your email and click the verification link");
+                }
             } else {
-                String error = task.getException() != null ?
-                        task.getException().getMessage() : "Unknown error";
+                String error = "Unknown error";
+                if (task.getException() != null && task.getException().getMessage() != null) {
+                    error = task.getException().getMessage();
+                }
                 Toast.makeText(this,
-                        "Failed to send: " + error,
-                        Toast.LENGTH_LONG).show();
+                        "Failed to send: " + error, Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -119,9 +120,10 @@ public class VerifyEmailActivity extends BaseActivity{
     }
 
     private void logout() {
-        mAuth.signOut();
-        startActivity(new Intent(this, LoginActivity.class));
-        finish();
+        try {
+            mAuth.signOut();
+        } catch (Exception ignored) {}
+        goToLogin();
     }
 
     private void goToHome() {
@@ -131,10 +133,16 @@ public class VerifyEmailActivity extends BaseActivity{
         finish();
     }
 
+    private void goToLogin() {
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Stop auto-check when activity is destroyed
         if (handler != null && autoCheckRunnable != null) {
             handler.removeCallbacks(autoCheckRunnable);
         }

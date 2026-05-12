@@ -3,8 +3,7 @@ package com.example.goprox;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
-
-import androidx.appcompat.app.AppCompatActivity;
+import android.widget.Toast;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -22,24 +21,32 @@ public class MainActivity extends BaseActivity {
         mAuth = FirebaseAuth.getInstance();
         FirebaseUser user = mAuth.getCurrentUser();
 
-        // Եթե օգտատերը արդեն կա և verify արած է → ուղղակի HomeActivity
+        // If user exists and email verified → go to Home
         if (user != null && user.isEmailVerified()) {
-            startActivity(new Intent(MainActivity.this, HomeActivity.class)); // 🔥 ՓՈԽԵՑԻ
-            finish();
+            goToActivity(HomeActivity.class);
             return;
         }
 
         btnLogin = findViewById(R.id.btnLogin);
         btnRegister = findViewById(R.id.btnRegistration);
 
-        btnLogin.setOnClickListener(v -> {
-            startActivity(new Intent(MainActivity.this, LoginActivity.class));
-            finish();
-        });
+        if (btnLogin == null || btnRegister == null) {
+            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        btnRegister.setOnClickListener(v -> {
-            startActivity(new Intent(MainActivity.this, RegistrationActivity.class));
+        btnLogin.setOnClickListener(v -> goToActivity(LoginActivity.class));
+        btnRegister.setOnClickListener(v -> goToActivity(RegistrationActivity.class));
+    }
+
+    private void goToActivity(Class<?> target) {
+        try {
+            Intent intent = new Intent(this, target);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
             finish();
-        });
+        } catch (Exception e) {
+            Toast.makeText(this, "Navigation error", Toast.LENGTH_SHORT).show();
+        }
     }
 }

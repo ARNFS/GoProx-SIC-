@@ -20,11 +20,9 @@ android {
 
         val groqApiKey = getLocalProperty("GROQ_API_KEY")
         val deepseekApiKey = getLocalProperty("DEEPSEEK_API_KEY")
-        val agoraAppId = getLocalProperty("AGORA_APP_ID")
 
         buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekApiKey\"")
-        buildConfigField("String", "AGORA_APP_ID", "\"$agoraAppId\"")
     }
 
     buildFeatures {
@@ -77,12 +75,13 @@ dependencies {
     implementation("androidx.cardview:cardview:1.0.0")
 
     // Firebase BOM + services
-    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging:25.0.2")
 
     // Google Play Services
     implementation("com.google.android.gms:play-services-auth:21.5.1")
@@ -98,11 +97,13 @@ dependencies {
 
     // JSON
     implementation("org.json:json:20251224")
+
+    // CircleImageView
     implementation("de.hdodenhof:circleimageview:3.1.0")
 
     // Glide
-    implementation("com.github.bumptech.glide:glide:5.0.5")
-    annotationProcessor("com.github.bumptech.glide:compiler:5.0.5")
+    implementation("com.github.bumptech.glide:glide:5.0.7")
+    annotationProcessor("com.github.bumptech.glide:compiler:5.0.7")
 
     // PhotoView
     implementation("com.github.chrisbanes:PhotoView:2.3.0")
@@ -110,15 +111,12 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // Agora Video SDK
-    implementation("io.agora.rtc:full-sdk:4.3.1")
-
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
     // Google Maps
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-maps:20.0.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

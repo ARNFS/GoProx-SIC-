@@ -9,7 +9,6 @@ import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -17,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ public class ServiceDetailActivity extends AppCompatActivity {
     private TextView tvName, tvProfession, tvDescription, tvPrice;
     private TextView tvRatingText, tvRatingCount;
     private RatingBar ratingBar, ratingBarUser;
-    private Button btnContact, btnMessage, btnSubmitReview;
+    private Button btnMessage, btnSubmitReview;
     private EditText etReview;
     private RecyclerView recyclerViewReviews;
     private ReviewAdapter reviewAdapter;
@@ -44,7 +44,14 @@ public class ServiceDetailActivity extends AppCompatActivity {
         setContentView(R.layout.activity_service_detail);
 
         db = FirebaseFirestore.getInstance();
-        currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Please sign in", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        currentUserId = user.getUid();
 
         initViews();
         setupToolbar();
@@ -64,14 +71,21 @@ public class ServiceDetailActivity extends AppCompatActivity {
         tvRatingCount = findViewById(R.id.tvRatingCount);
         ratingBar = findViewById(R.id.ratingBarDetail);
         ratingBarUser = findViewById(R.id.ratingBarUser);
-        btnContact = findViewById(R.id.btnContact);
         btnMessage = findViewById(R.id.btnMessage);
         btnSubmitReview = findViewById(R.id.btnSubmitReview);
         etReview = findViewById(R.id.etReview);
         recyclerViewReviews = findViewById(R.id.recyclerViewReviews);
 
-        ratingBarUser.setStepSize(0.5f);
-        ratingBarUser.setNumStars(5);
+        if (recyclerViewReviews == null || btnSubmitReview == null || btnMessage == null) {
+            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        if (ratingBarUser != null) {
+            ratingBarUser.setStepSize(0.5f);
+            ratingBarUser.setNumStars(5);
+        }
 
         recyclerViewReviews.setLayoutManager(new LinearLayoutManager(this));
         reviewAdapter = new ReviewAdapter(new ArrayList<>());
@@ -80,37 +94,48 @@ public class ServiceDetailActivity extends AppCompatActivity {
 
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            }
         }
     }
 
     private void loadDataFromIntent() {
-        serviceId = getIntent().getStringExtra("serviceId");
-        String name = getIntent().getStringExtra("name");
-        String profession = getIntent().getStringExtra("profession");
-        String description = getIntent().getStringExtra("description");
-        String price = getIntent().getStringExtra("price");
-        float rating = getIntent().getFloatExtra("rating", 0);
-        int ratingCount = getIntent().getIntExtra("ratingCount", 0);
-        String imageUrl = getIntent().getStringExtra("imageUrl");
-        otherUserId = getIntent().getStringExtra("userId");
+        Intent intent = getIntent();
+        serviceId = intent.getStringExtra("serviceId");
+        String name = intent.getStringExtra("name");
+        String profession = intent.getStringExtra("profession");
+        String description = intent.getStringExtra("description");
+        String price = intent.getStringExtra("price");
+        float rating = intent.getFloatExtra("rating", 0);
+        int ratingCount = intent.getIntExtra("ratingCount", 0);
+        String imageUrl = intent.getStringExtra("imageUrl");
+        otherUserId = intent.getStringExtra("userId");
         serviceName = name;
 
-        if (imageUrl != null && !imageUrl.isEmpty()) {
-            Glide.with(this).load(imageUrl).into(ivProfile);
+        if (ivProfile != null && imageUrl != null && !imageUrl.isEmpty()) {
+            try {
+                Glide.with(this).load(imageUrl)
+                        .placeholder(R.drawable.ic_profile_placeholder)
+                        .error(R.drawable.ic_profile_placeholder)
+                        .into(ivProfile);
+            } catch (Exception ignored) {}
         }
-        tvName.setText(name != null ? name : "");
-        tvProfession.setText(profession != null ? profession : "");
-        tvDescription.setText(description != null ? description : "");
-        tvPrice.setText(price != null ? price : "");
 
-        ratingBar.setRating(rating);
-        tvRatingText.setText(String.format("%.1f", rating));
-        tvRatingCount.setText("(" + ratingCount + " reviews)");
-
-        tvProfession.setTextColor(getResources().getColor(R.color.blue, getTheme()));
+        if (tvName != null) tvName.setText(name != null ? name : "");
+        if (tvProfession != null) {
+            tvProfession.setText(profession != null ? profession : "");
+            try {
+                tvProfession.setTextColor(getResources().getColor(R.color.blue, getTheme()));
+            } catch (Exception ignored) {}
+        }
+        if (tvDescription != null) tvDescription.setText(description != null ? description : "");
+        if (tvPrice != null) tvPrice.setText(price != null ? price : "");
+        if (ratingBar != null) ratingBar.setRating(rating);
+        if (tvRatingText != null) tvRatingText.setText(String.format("%.1f", rating));
+        if (tvRatingCount != null) tvRatingCount.setText("(" + ratingCount + " reviews)");
 
         if (otherUserId == null || otherUserId.isEmpty()) {
             loadUserIdFromFirestore();
@@ -121,43 +146,60 @@ public class ServiceDetailActivity extends AppCompatActivity {
         if (serviceId == null) return;
         db.collection("services").document(serviceId).get()
                 .addOnSuccessListener(doc -> {
-                    if (doc.exists()) {
+                    if (doc != null && doc.exists()) {
                         otherUserId = doc.getString("userId");
                         if (otherUserId == null || otherUserId.isEmpty()) {
-                            Toast.makeText(this, "Error: specialist ID missing", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this,
+                                    "Error: specialist ID missing",
+                                    Toast.LENGTH_SHORT).show();
                         }
                     }
                 })
-                .addOnFailureListener(e -> Toast.makeText(this, "Failed to load user", Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e ->
+                        Toast.makeText(this,
+                                "Failed to load user", Toast.LENGTH_SHORT).show());
     }
 
-    private void loadReviews() {
-        if (serviceId == null) return;
-        db.collection("services").document(serviceId).collection("reviews")
-                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .get()
-                .addOnSuccessListener(snapshots -> {
-                    List<Review> reviews = new ArrayList<>();
-                    for (var doc : snapshots) {
-                        String userName = doc.getString("userName");
-                        float userRating = doc.getDouble("rating") != null ? doc.getDouble("rating").floatValue() : 0;
-                        String comment = doc.getString("comment");
-                        long timestamp = doc.getLong("timestamp") != null ? doc.getLong("timestamp") : 0;
-                        reviews.add(new Review(userName, userRating, comment, timestamp));
-                    }
-                    reviewAdapter.updateList(reviews);
-                });
+    private void setupButtons() {
+        if (btnMessage != null) {
+            btnMessage.setOnClickListener(v -> openChat());
+        }
+    }
+
+    private void openChat() {
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            Toast.makeText(this, "Wait, loading specialist...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (otherUserId.equals(currentUserId)) {
+            Toast.makeText(this, "You cannot chat with yourself", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, ChatActivity.class);
+        intent.putExtra("otherUserId", otherUserId);
+        intent.putExtra("otherUserName", tvName != null ? tvName.getText().toString() : "Unknown");
+        startActivity(intent);
     }
 
     private void setupReviewButton() {
+        if (btnSubmitReview == null) return;
+
         btnSubmitReview.setOnClickListener(v -> {
+            if (etReview == null || ratingBarUser == null) return;
+
             String text = etReview.getText().toString().trim();
             float userRating = ratingBarUser.getRating();
+
             if (text.isEmpty() || userRating == 0) {
-                Toast.makeText(this, "Please enter a review and rating", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this,
+                        "Please enter a review and rating",
+                        Toast.LENGTH_SHORT).show();
                 return;
             }
-            String userName = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
+
+            String userName = FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? FirebaseAuth.getInstance().getCurrentUser().getDisplayName()
+                    : null;
             if (userName == null) userName = "User";
 
             Map<String, Object> review = new HashMap<>();
@@ -167,7 +209,8 @@ public class ServiceDetailActivity extends AppCompatActivity {
             review.put("comment", text);
             review.put("timestamp", System.currentTimeMillis());
 
-            db.collection("services").document(serviceId).collection("reviews")
+            db.collection("services").document(serviceId)
+                    .collection("reviews")
                     .add(review)
                     .addOnSuccessListener(doc -> {
                         Toast.makeText(this, "Review added", Toast.LENGTH_SHORT).show();
@@ -175,12 +218,50 @@ public class ServiceDetailActivity extends AppCompatActivity {
                         ratingBarUser.setRating(0);
                         updateServiceRating();
                         loadReviews();
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Failed to add review", Toast.LENGTH_SHORT).show();
                     });
         });
     }
 
+    private void loadReviews() {
+        if (serviceId == null || reviewAdapter == null) return;
+
+        db.collection("services").document(serviceId)
+                .collection("reviews")
+                .orderBy("timestamp",
+                        com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(snapshots -> {
+                    List<Review> reviews = new ArrayList<>();
+                    for (var doc : snapshots) {
+                        String userName = doc.getString("userName");
+                        float userRating = 0;
+                        Double ratingDouble = doc.getDouble("rating");
+                        if (ratingDouble != null) userRating = ratingDouble.floatValue();
+                        String comment = doc.getString("comment");
+                        long timestamp = 0;
+                        Long tsLong = doc.getLong("timestamp");
+                        if (tsLong != null) timestamp = tsLong;
+                        reviews.add(new Review(
+                                userName != null ? userName : "Unknown",
+                                userRating,
+                                comment != null ? comment : "",
+                                timestamp));
+                    }
+                    reviewAdapter.updateList(reviews);
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "Failed to load reviews", Toast.LENGTH_SHORT).show();
+                });
+    }
+
     private void updateServiceRating() {
-        db.collection("services").document(serviceId).collection("reviews")
+        if (serviceId == null) return;
+
+        db.collection("services").document(serviceId)
+                .collection("reviews")
                 .get()
                 .addOnSuccessListener(docs -> {
                     float total = 0;
@@ -196,49 +277,17 @@ public class ServiceDetailActivity extends AppCompatActivity {
                     updates.put("ratingCount", count);
                     db.collection("services").document(serviceId).update(updates);
 
-                    ratingBar.setRating(newAvg);
-                    tvRatingText.setText(String.format("%.1f", newAvg));
-                    tvRatingCount.setText("(" + count + " reviews)");
+                    if (ratingBar != null) ratingBar.setRating(newAvg);
+                    if (tvRatingText != null)
+                        tvRatingText.setText(String.format("%.1f", newAvg));
+                    if (tvRatingCount != null)
+                        tvRatingCount.setText("(" + count + " reviews)");
                 });
     }
 
-    private void setupButtons() {
-        btnContact.setOnClickListener(v -> {
-            if (otherUserId == null || otherUserId.isEmpty()) {
-                Toast.makeText(this, "Loading specialist info...", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            new AlertDialog.Builder(this)
-                    .setTitle("Call type")
-                    .setItems(new String[]{"Audio", "Video"}, (dialog, which) -> {
-                        String channelName = (currentUserId.compareTo(otherUserId) < 0) ?
-                                currentUserId + "_" + otherUserId : otherUserId + "_" + currentUserId;
-
-                        Intent i = new Intent(ServiceDetailActivity.this, CallActivity.class);
-                        i.putExtra("channelName", channelName);
-                        i.putExtra("IS_AUDIO_ONLY", which == 0);
-                        startActivity(i);
-                    })
-                    .show();
-        });
-
-        btnMessage.setOnClickListener(v -> openChat());
-    }
-
-    private void openChat() {
-        if (otherUserId == null || otherUserId.isEmpty()) {
-            Toast.makeText(this, "Wait, loading specialist...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (currentUserId.equals(otherUserId)) {
-            Toast.makeText(this, "You cannot chat with yourself", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra("otherUserId", otherUserId);
-        intent.putExtra("otherUserName", tvName.getText().toString());
-        startActivity(intent);
+    @Override
+    public boolean onSupportNavigateUp() {
+        onBackPressed();
+        return true;
     }
 }

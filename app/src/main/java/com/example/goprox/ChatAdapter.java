@@ -22,8 +22,8 @@ import java.util.Locale;
 
 public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
-    private List<ChatMessage> messages;
-    private String currentUserId;
+    private final List<ChatMessage> messages;
+    private final String currentUserId;
     private MediaPlayer mediaPlayer;
     private static final int VIEW_TYPE_ME = 0;
     private static final int VIEW_TYPE_OTHER = 1;
@@ -35,7 +35,14 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
     @Override
     public int getItemViewType(int position) {
-        return messages.get(position).getSenderId().equals(currentUserId) ? VIEW_TYPE_ME : VIEW_TYPE_OTHER;
+        if (messages == null || position < 0 || position >= messages.size()) {
+            return VIEW_TYPE_OTHER;
+        }
+        ChatMessage msg = messages.get(position);
+        if (msg == null || msg.getSenderId() == null) {
+            return VIEW_TYPE_OTHER;
+        }
+        return msg.getSenderId().equals(currentUserId) ? VIEW_TYPE_ME : VIEW_TYPE_OTHER;
     }
 
     @NonNull
@@ -53,74 +60,121 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        ChatMessage msg = messages.get(position);
-        holder.tvTime.setText(new SimpleDateFormat("HH:mm", Locale.getDefault())
-                .format(new Date(msg.getTimestamp())));
+        if (messages == null || position < 0 || position >= messages.size()) return;
 
+        ChatMessage msg = messages.get(position);
+        if (msg == null) return;
+
+        // Time
+        if (holder.tvTime != null && msg.getTimestamp() > 0) {
+            holder.tvTime.setText(new SimpleDateFormat("HH:mm", Locale.getDefault())
+                    .format(new Date(msg.getTimestamp())));
+        } else if (holder.tvTime != null) {
+            holder.tvTime.setText("");
+        }
+
+        // Image message
         if ("image".equals(msg.getType())) {
-            holder.tvMessage.setVisibility(View.GONE);
-            holder.ivImage.setVisibility(View.VISIBLE);
-            Glide.with(holder.itemView.getContext())
-                    .load(msg.getFileUrl())
-                    .placeholder(R.drawable.ic_image_placeholder)
-                    .into(holder.ivImage);
-            holder.ivImage.setOnClickListener(v -> {
-                Intent intent = new Intent(holder.itemView.getContext(), FullscreenImageActivity.class);
-                intent.putExtra("imageUrl", msg.getFileUrl());
-                holder.itemView.getContext().startActivity(intent);
-            });
-        } else if ("file".equals(msg.getType())) {
-            holder.tvMessage.setVisibility(View.VISIBLE);
-            holder.ivImage.setVisibility(View.GONE);
-            holder.tvMessage.setText("[File] " + msg.getText());
+            if (holder.tvMessage != null) holder.tvMessage.setVisibility(View.GONE);
+            if (holder.ivImage != null) {
+                holder.ivImage.setVisibility(View.VISIBLE);
+                if (msg.getFileUrl() != null && !msg.getFileUrl().isEmpty()) {
+                    try {
+                        Glide.with(holder.itemView.getContext())
+                                .load(msg.getFileUrl())
+                                .placeholder(R.drawable.ic_image_placeholder)
+                                .into(holder.ivImage);
+                    } catch (Exception ignored) {}
+                }
+                holder.ivImage.setOnClickListener(v -> {
+                    if (msg.getFileUrl() != null) {
+                        try {
+                            Intent intent = new Intent(holder.itemView.getContext(),
+                                    FullscreenImageActivity.class);
+                            intent.putExtra("imageUrl", msg.getFileUrl());
+                            holder.itemView.getContext().startActivity(intent);
+                        } catch (Exception ignored) {}
+                    }
+                });
+            }
+        }
+        // File message
+        else if ("file".equals(msg.getType())) {
+            if (holder.tvMessage != null) {
+                holder.tvMessage.setVisibility(View.VISIBLE);
+                String text = msg.getText() != null ? msg.getText() : "File";
+                holder.tvMessage.setText("[File] " + text);
+            }
+            if (holder.ivImage != null) holder.ivImage.setVisibility(View.GONE);
             holder.itemView.setOnClickListener(v -> {
-                if (holder.itemView.getContext() instanceof ChatActivity) {
+                if (holder.itemView.getContext() instanceof ChatActivity
+                        && msg.getFileUrl() != null) {
                     ((ChatActivity) holder.itemView.getContext()).openFile(msg.getFileUrl());
                 }
             });
-        } else if ("voice".equals(msg.getType())) {
-            holder.tvMessage.setVisibility(View.VISIBLE);
-            holder.ivImage.setVisibility(View.GONE);
-            holder.tvMessage.setText("Voice message");
+        }
+        // Voice message
+        else if ("voice".equals(msg.getType())) {
+            if (holder.tvMessage != null) {
+                holder.tvMessage.setVisibility(View.VISIBLE);
+                holder.tvMessage.setText("Voice message");
+            }
+            if (holder.ivImage != null) holder.ivImage.setVisibility(View.GONE);
             holder.itemView.setOnClickListener(v -> playVoiceMessage(msg.getFileUrl(), holder));
-        } else {
-            holder.tvMessage.setVisibility(View.VISIBLE);
-            holder.ivImage.setVisibility(View.GONE);
-            holder.tvMessage.setText(msg.getText());
+        }
+        // Text message
+        else {
+            if (holder.tvMessage != null) {
+                holder.tvMessage.setVisibility(View.VISIBLE);
+                holder.tvMessage.setText(msg.getText() != null ? msg.getText() : "");
+            }
+            if (holder.ivImage != null) holder.ivImage.setVisibility(View.GONE);
         }
     }
 
     private void playVoiceMessage(String audioUrl, ViewHolder holder) {
-        if (mediaPlayer != null) {
-            mediaPlayer.release();
-        }
+        if (audioUrl == null || holder == null || holder.itemView == null) return;
+
+        stopPlaying();
+
         mediaPlayer = new MediaPlayer();
         try {
             mediaPlayer.setDataSource(audioUrl);
-            mediaPlayer.prepareAsync();
             mediaPlayer.setOnPreparedListener(mp -> {
-                mp.start();
-                Toast.makeText(holder.itemView.getContext(), "Playing voice message", Toast.LENGTH_SHORT).show();
+                try {
+                    mp.start();
+                    Toast.makeText(holder.itemView.getContext(),
+                            "Playing voice message", Toast.LENGTH_SHORT).show();
+                } catch (Exception ignored) {}
             });
             mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                Toast.makeText(holder.itemView.getContext(), "Failed to play audio", Toast.LENGTH_SHORT).show();
+                Toast.makeText(holder.itemView.getContext(),
+                        "Failed to play audio", Toast.LENGTH_SHORT).show();
                 return true;
             });
+            mediaPlayer.prepareAsync();
         } catch (IOException e) {
-            Toast.makeText(holder.itemView.getContext(), "Error playing audio", Toast.LENGTH_SHORT).show();
+            Toast.makeText(holder.itemView.getContext(),
+                    "Error playing audio", Toast.LENGTH_SHORT).show();
         }
     }
 
     public void stopPlaying() {
         if (mediaPlayer != null) {
-            mediaPlayer.release();
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.reset();
+                mediaPlayer.release();
+            } catch (Exception ignored) {}
             mediaPlayer = null;
         }
     }
 
     @Override
     public int getItemCount() {
-        return messages.size();
+        return messages != null ? messages.size() : 0;
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

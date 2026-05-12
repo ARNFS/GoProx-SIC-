@@ -19,7 +19,7 @@ import java.util.List;
 
 public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.ViewHolder> {
 
-    private Context context;
+    private final Context context;
     private List<Service> serviceList;
     private OnItemClickListener listener;
 
@@ -45,60 +45,94 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        if (serviceList == null || position < 0 || position >= serviceList.size()) return;
+
         Service service = serviceList.get(position);
+        if (service == null) return;
 
-        holder.tvName.setText(service.getName());
-        holder.tvProfession.setText(service.getProfession());
-        holder.tvDescription.setText(service.getDescription());
-        holder.tvPrice.setText(service.getPrice());
-        holder.ratingBar.setRating(service.getRating());
-
-        holder.tvProfession.setTextColor(ContextCompat.getColor(context, R.color.red));
-        holder.tvDescription.setTextColor(ContextCompat.getColor(context, R.color.blue));
-
-        if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
-            Glide.with(context)
-                    .load(service.getImageUrl())
-                    .placeholder(R.drawable.ic_profile_placeholder)
-                    .into(holder.ivProfile);
-        } else {
-            holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+        if (holder.tvName != null) {
+            holder.tvName.setText(service.getName() != null ? service.getName() : "");
+        }
+        if (holder.tvProfession != null) {
+            holder.tvProfession.setText(service.getProfession() != null ? service.getProfession() : "");
+            try {
+                holder.tvProfession.setTextColor(
+                        ContextCompat.getColor(context, R.color.red));
+            } catch (Exception ignored) {}
+        }
+        if (holder.tvDescription != null) {
+            holder.tvDescription.setText(service.getDescription() != null ? service.getDescription() : "");
+            try {
+                holder.tvDescription.setTextColor(
+                        ContextCompat.getColor(context, R.color.blue));
+            } catch (Exception ignored) {}
+        }
+        if (holder.tvPrice != null) {
+            holder.tvPrice.setText(service.getPrice() != null ? service.getPrice() : "");
+        }
+        if (holder.ratingBar != null) {
+            holder.ratingBar.setRating(service.getRating());
         }
 
-        // Отображение локации
-        String location = "";
-        if (service.getCity() != null && !service.getCity().isEmpty() &&
-                service.getCountry() != null && !service.getCountry().isEmpty()) {
-            location = service.getCity() + ", " + service.getCountry();
-        } else if (service.getCity() != null && !service.getCity().isEmpty()) {
-            location = service.getCity();
-        } else if (service.getCountry() != null && !service.getCountry().isEmpty()) {
-            location = service.getCountry();
+        // Avatar
+        if (holder.ivProfile != null) {
+            if (service.getImageUrl() != null && !service.getImageUrl().isEmpty() && context != null) {
+                try {
+                    Glide.with(context)
+                            .load(service.getImageUrl())
+                            .placeholder(R.drawable.ic_profile_placeholder)
+                            .error(R.drawable.ic_profile_placeholder)
+                            .into(holder.ivProfile);
+                } catch (Exception e) {
+                    holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+                }
+            } else {
+                holder.ivProfile.setImageResource(R.drawable.ic_profile_placeholder);
+            }
         }
 
-        if (!location.isEmpty()) {
-            holder.tvLocation.setText(location);
-            holder.ivLocation.setVisibility(View.VISIBLE);
-            holder.tvLocation.setVisibility(View.VISIBLE);
-        } else {
-            holder.ivLocation.setVisibility(View.GONE);
-            holder.tvLocation.setVisibility(View.GONE);
+        // Location
+        if (holder.tvLocation != null && holder.ivLocation != null) {
+            String country = service.getCountry();
+            String city = service.getCity();
+            boolean hasCountry = country != null && !country.isEmpty();
+            boolean hasCity = city != null && !city.isEmpty();
+
+            if (hasCountry && hasCity) {
+                holder.tvLocation.setText(city + ", " + country);
+                holder.ivLocation.setVisibility(View.VISIBLE);
+                holder.tvLocation.setVisibility(View.VISIBLE);
+            } else if (hasCountry) {
+                holder.tvLocation.setText(country);
+                holder.ivLocation.setVisibility(View.VISIBLE);
+                holder.tvLocation.setVisibility(View.VISIBLE);
+            } else if (hasCity) {
+                holder.tvLocation.setText(city);
+                holder.ivLocation.setVisibility(View.VISIBLE);
+                holder.tvLocation.setVisibility(View.VISIBLE);
+            } else {
+                holder.ivLocation.setVisibility(View.GONE);
+                holder.tvLocation.setVisibility(View.GONE);
+            }
         }
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
-                listener.onItemClick(position);
+                int pos = holder.getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    listener.onItemClick(pos);
+                }
             }
         });
     }
 
     @Override
     public int getItemCount() {
-        return serviceList.size();
+        return serviceList != null ? serviceList.size() : 0;
     }
 
     public void updateList(List<Service> newList) {
-        serviceList = newList;
+        this.serviceList = newList;
         notifyDataSetChanged();
     }
 

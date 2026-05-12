@@ -16,8 +16,8 @@ import java.util.Locale;
 
 public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatViewHolder> {
 
-    private List<ChatSummary> chatList;
-    private OnChatClickListener listener;
+    private final List<ChatSummary> chatList;
+    private final OnChatClickListener listener;
 
     public interface OnChatClickListener {
         void onChatClick(ChatSummary chat);
@@ -38,34 +38,62 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatVi
 
     @Override
     public void onBindViewHolder(@NonNull ChatViewHolder holder, int position) {
-        ChatSummary chat = chatList.get(position);
-        holder.nameText.setText(chat.getReceiverName());
-        holder.lastMessageText.setText(chat.getLastMessage());
+        if (chatList == null || position < 0 || position >= chatList.size()) return;
 
-        if (chat.getTimestamp() > 0) {
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            holder.timeText.setText(sdf.format(new Date(chat.getTimestamp())));
-        } else {
-            holder.timeText.setText("");
+        ChatSummary chat = chatList.get(position);
+        if (chat == null) return;
+
+        // Name
+        if (holder.nameText != null) {
+            holder.nameText.setText(chat.getReceiverName() != null ? chat.getReceiverName() : "Unknown");
+        }
+
+        // Last message
+        if (holder.lastMessageText != null) {
+            holder.lastMessageText.setText(chat.getLastMessage() != null ? chat.getLastMessage() : "");
+        }
+
+        // Time
+        if (holder.timeText != null) {
+            if (chat.getTimestamp() > 0) {
+                SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+                holder.timeText.setText(sdf.format(new Date(chat.getTimestamp())));
+            } else {
+                holder.timeText.setText("");
+            }
         }
 
         // Unread badge
-        int unread = chat.getUnreadCount();
-        if (unread > 0) {
-            holder.unreadBadge.setVisibility(View.VISIBLE);
-            holder.unreadBadge.setText(String.valueOf(unread));
-            holder.nameText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), android.R.color.black));
-        } else {
-            holder.unreadBadge.setVisibility(View.GONE);
-            holder.nameText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), android.R.color.darker_gray));
+        int unread = Math.max(chat.getUnreadCount(), 0);
+        if (holder.unreadBadge != null) {
+            if (unread > 0) {
+                holder.unreadBadge.setVisibility(View.VISIBLE);
+                holder.unreadBadge.setText(String.valueOf(unread));
+            } else {
+                holder.unreadBadge.setVisibility(View.GONE);
+            }
         }
 
-        holder.itemView.setOnClickListener(v -> listener.onChatClick(chat));
+        // Name color based on unread
+        if (holder.nameText != null && holder.itemView != null) {
+            try {
+                holder.nameText.setTextColor(unread > 0
+                        ? ContextCompat.getColor(holder.itemView.getContext(), android.R.color.black)
+                        : ContextCompat.getColor(holder.itemView.getContext(), android.R.color.darker_gray));
+            } catch (Exception ignored) {}
+        }
+
+        // Click listener
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null && chat != null) {
+                listener.onChatClick(chat);
+            }
+        });
     }
 
     @Override
     public int getItemCount() {
-        return chatList.size();
+        return chatList != null ? chatList.size() : 0;
     }
 
     static class ChatViewHolder extends RecyclerView.ViewHolder {
