@@ -30,7 +30,7 @@ public class ServiceDetailActivity extends AppCompatActivity {
     private TextView tvName, tvProfession, tvDescription, tvPrice;
     private TextView tvRatingText, tvRatingCount;
     private RatingBar ratingBar, ratingBarUser;
-    private Button btnMessage, btnSubmitReview;
+    private Button btnContact, btnMessage, btnSubmitReview;
     private EditText etReview;
     private RecyclerView recyclerViewReviews;
     private ReviewAdapter reviewAdapter;
@@ -71,12 +71,13 @@ public class ServiceDetailActivity extends AppCompatActivity {
         tvRatingCount = findViewById(R.id.tvRatingCount);
         ratingBar = findViewById(R.id.ratingBarDetail);
         ratingBarUser = findViewById(R.id.ratingBarUser);
+        btnContact = findViewById(R.id.btnContact);
         btnMessage = findViewById(R.id.btnMessage);
         btnSubmitReview = findViewById(R.id.btnSubmitReview);
         etReview = findViewById(R.id.etReview);
         recyclerViewReviews = findViewById(R.id.recyclerViewReviews);
 
-        if (recyclerViewReviews == null || btnSubmitReview == null || btnMessage == null) {
+        if (recyclerViewReviews == null || btnSubmitReview == null || btnMessage == null || btnContact == null) {
             Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -161,6 +162,19 @@ public class ServiceDetailActivity extends AppCompatActivity {
     }
 
     private void setupButtons() {
+        if (btnContact != null) {
+            btnContact.setOnClickListener(v -> {
+                if (otherUserId == null || otherUserId.isEmpty()) {
+                    Toast.makeText(this, "Loading specialist info...", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // 🔥 Օգտագործում ենք CallHelper-ը, profession-ը որպես serviceTitle
+                String title = tvProfession != null ? tvProfession.getText().toString() : "";
+                CallHelper.startCall(this, otherUserId,
+                        tvName != null ? tvName.getText().toString() : "User",
+                        title);
+            });
+        }
         if (btnMessage != null) {
             btnMessage.setOnClickListener(v -> openChat());
         }

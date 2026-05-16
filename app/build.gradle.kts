@@ -20,9 +20,11 @@ android {
 
         val groqApiKey = getLocalProperty("GROQ_API_KEY")
         val deepseekApiKey = getLocalProperty("DEEPSEEK_API_KEY")
+        val agoraAppId = getLocalProperty("AGORA_APP_ID")
 
         buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekApiKey\"")
+        buildConfigField("String", "AGORA_APP_ID", "\"$agoraAppId\"")
     }
 
     buildFeatures {
@@ -119,4 +121,7 @@ dependencies {
     // Google Maps
     implementation("com.google.android.gms:play-services-maps:20.0.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // Agora Video SDK
+    implementation("io.agora.rtc:full-sdk:4.6.3")
 }

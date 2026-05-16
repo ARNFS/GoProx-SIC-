@@ -1,40 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/primary"
-    android:keepScreenOn="true">
+    android:background="#1A1A2E">
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000" />
+
+    <!-- Callee Photo -->
+    <de.hdodenhof.circleimageview.CircleImageView
+        android:id="@+id/ivCalleePhoto"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="120dp"
+        android:src="@drawable/ic_profile_placeholder" />
+
+    <!-- Callee Name -->
     <TextView
         android:id="@+id/tvCalleeName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="80dp"
+        android:layout_marginTop="260dp"
         android:text="Calling..."
         android:textColor="@android:color/white"
-        android:textSize="28sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
+    <!-- Service Title -->
     <TextView
+        android:id="@+id/tvServiceTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/tvCalleeName"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:text="Ringing..."
-        android:textColor="@android:color/white"
-        android:textSize="18sp" />
+        android:layout_marginTop="12dp"
+        android:text=""
+        android:textColor="#CCCCCC"
+        android:textSize="16sp" />
 
-    <ImageButton
-        android:id="@+id/btnCancelCall"
-        android:layout_width="70dp"
-        android:layout_height="70dp"
-        android:layout_alignParentBottom="true"
+    <!-- Status Label -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvServiceTitle"
         android:layout_centerHorizontal="true"
-        android:layout_marginBottom="60dp"
-        android:background="@drawable/bg_end_call_button"
-        android:src="@drawable/ic_call_end"
-        app:tint="@android:color/white" />
+        android:layout_marginTop="40dp"
+        android:text="Calling..."
+        android:textColor="#88FFFFFF"
+        android:textSize="14sp" />
+
+    <!-- Cancel Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="80dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnCancelCall"
+            android:layout_width="70dp"
+            android:layout_height="70dp"
+            android:background="@drawable/bg_decline_call_button"
+            android:src="@drawable/ic_call_end"
+            android:contentDescription="Cancel" />
+
+    </LinearLayout>
+
 </RelativeLayout>

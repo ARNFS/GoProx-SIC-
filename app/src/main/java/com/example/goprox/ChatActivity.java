@@ -57,7 +57,7 @@ public class ChatActivity extends BaseActivity {
 
     private RecyclerView recyclerView;
     private EditText etMessage;
-    private ImageButton btnSend, btnAttach, btnBack, btnMic;
+    private ImageButton btnSend, btnAttach, btnBack, btnMic, btnVideoCall;
     private TextView tvUserName;
     private ChatAdapter adapter;
     private final List<ChatMessage> messageList = new ArrayList<>();
@@ -120,6 +120,7 @@ public class ChatActivity extends BaseActivity {
         btnAttach = findViewById(R.id.btnAttach);
         btnBack = findViewById(R.id.btnBack);
         btnMic = findViewById(R.id.btnMic);
+        btnVideoCall = findViewById(R.id.btnVideoCall);
         tvUserName = findViewById(R.id.tvUserName);
 
         if (recyclerView == null || btnSend == null || etMessage == null) {
@@ -138,6 +139,14 @@ public class ChatActivity extends BaseActivity {
         btnBack.setOnClickListener(v -> finish());
         btnAttach.setOnClickListener(v -> showAttachmentDialog());
         btnMic.setOnClickListener(v -> checkAndStartVoiceRecording());
+        if (btnVideoCall != null) {
+            btnVideoCall.setOnClickListener(v -> {
+                // 🔥 Օգտագործում ենք CallHelper-ը, serviceTitle-ը դատարկ (chat-ից զանգի դեպքում)
+                CallHelper.startCall(ChatActivity.this, otherUserId,
+                        tvUserName != null ? tvUserName.getText().toString() : "User",
+                        null);
+            });
+        }
     }
 
     // ================== VOICE RECORDING ==================

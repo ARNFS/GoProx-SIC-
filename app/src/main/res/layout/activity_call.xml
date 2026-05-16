@@ -1,60 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
+    <!-- Remote Video (Full Screen) -->
     <FrameLayout
         android:id="@+id/flRemoteVideo"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="#000000" />
 
+    <!-- Local Video (Small, Draggable) -->
     <FrameLayout
         android:id="@+id/flLocalVideo"
         android:layout_width="120dp"
-        android:layout_height="180dp"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"
-        android:layout_marginTop="16dp"
+        android:layout_height="160dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="60dp"
         android:layout_marginEnd="16dp"
-        android:background="#80000000" />
+        android:background="#333333"
+        android:elevation="8dp" />
 
+    <!-- Caller Name (Remote) -->
+    <TextView
+        android:id="@+id/tvRemoteName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="16dp"
+        android:text="Caller Name"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <!-- Call Timer -->
+    <TextView
+        android:id="@+id/tvCallTimer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="40dp"
+        android:text="00:00"
+        android:textColor="#CCCCCC"
+        android:textSize="14sp" />
+
+    <!-- Controls Container -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginBottom="40dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="50dp"
         android:gravity="center"
         android:orientation="horizontal">
 
+        <!-- Mute Button -->
         <ImageButton
             android:id="@+id/btnMute"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
-            android:layout_marginHorizontal="8dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="16dp"
             android:background="@drawable/bg_call_button"
             android:src="@drawable/ic_mic_on"
-            app:tint="#FFFFFF" />
+            android:contentDescription="Mute" />
 
-        <ImageButton
-            android:id="@+id/btnEndCall"
-            android:layout_width="70dp"
-            android:layout_height="70dp"
-            android:layout_marginHorizontal="8dp"
-            android:background="@drawable/bg_end_call_button"
-            android:src="@drawable/ic_call_end"
-            app:tint="#FFFFFF" />
-
+        <!-- Camera Button -->
         <ImageButton
             android:id="@+id/btnCamera"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
-            android:layout_marginHorizontal="8dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="16dp"
             android:background="@drawable/bg_call_button"
             android:src="@drawable/ic_camera_off"
-            app:tint="#FFFFFF" />
+            android:contentDescription="Camera" />
+
+        <!-- Speaker Button -->
+        <ImageButton
+            android:id="@+id/btnSpeaker"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_call_button"
+            android:src="@drawable/ic_speaker_on"
+            android:contentDescription="Speaker" />
+
+        <!-- End Call Button -->
+        <ImageButton
+            android:id="@+id/btnEndCall"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_end_call_button"
+            android:src="@drawable/ic_call_end"
+            android:contentDescription="End Call" />
 
     </LinearLayout>
 
-</RelativeLayout>
+</FrameLayout>
