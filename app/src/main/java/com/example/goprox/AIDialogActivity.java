@@ -10,9 +10,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import org.json.JSONArray;
@@ -20,7 +18,6 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -37,7 +34,7 @@ public class AIDialogActivity extends BaseActivity {
     private Button btnSend;
     private LinearLayout llChatContainer;
     private ScrollView scrollView;
-/*ch*/
+
     private static final String GROQ_API_KEY = BuildConfig.GROQ_API_KEY;
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
@@ -126,7 +123,6 @@ public class AIDialogActivity extends BaseActivity {
                 return;
             }
 
-            // Build professional list for AI
             StringBuilder sb = new StringBuilder();
             for (Service s : services) {
                 sb.append("TITLE: ").append(s.getProfession()).append("\n");
@@ -204,7 +200,6 @@ public class AIDialogActivity extends BaseActivity {
                                     if (!t.isEmpty()) aiTitles.add(t);
                                 }
 
-                                // Platform filter
                                 String lowerProblem = problem.toLowerCase();
                                 boolean wantIos = lowerProblem.contains("iphone") || lowerProblem.contains("ios") || lowerProblem.contains("apple");
                                 boolean wantAndroid = lowerProblem.contains("android") || lowerProblem.contains("google play");
@@ -237,9 +232,11 @@ public class AIDialogActivity extends BaseActivity {
                                 }
 
                                 addMessage("✅ Found: " + TextUtils.join(", ", finalTitles), false);
+
+                                // 🔥 FIX: FLAG_ACTIVITY_SINGLE_TOP — որ HomeActivity-ն նոր Intent ստանա
                                 Intent intent = new Intent(AIDialogActivity.this, HomeActivity.class);
                                 intent.putStringArrayListExtra("profession_filter_list", finalTitles);
-                                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                                 startActivity(intent);
                                 finish();
 

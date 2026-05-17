@@ -1,13 +1,17 @@
 package com.example.goprox;
 
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.View;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -202,12 +206,31 @@ public class ProfileActivity extends BaseActivity {
                     Toast.makeText(this, "My services", Toast.LENGTH_SHORT).show());
         }
         if (btnLogout != null) {
-            btnLogout.setOnClickListener(v -> {
-                mAuth.signOut();
-                startActivity(new Intent(this, LoginActivity.class));
-                finish();
-            });
+            btnLogout.setOnClickListener(v -> showLogoutDialog());
         }
+    }
+
+    // 🔥 "ARE YOU SURE?" DIALOG — ԴԵՂԻՆ WARNING ICON-ՈՎ
+    private void showLogoutDialog() {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Logout")
+                .setMessage("Are you sure you want to logout?")
+                .setPositiveButton("Yes", (d, which) -> {
+                    mAuth.signOut();
+                    startActivity(new Intent(this, LoginActivity.class));
+                    finish();
+                })
+                .setNegativeButton("No", (d, which) -> d.dismiss())
+                .setIcon(R.drawable.ic_warning)
+                .create();
+
+        dialog.show();
+
+        // Դեղին գույնը icon-ի համար
+        try {
+            int yellowColor = ContextCompat.getColor(this, android.R.color.holo_orange_dark);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(yellowColor);
+        } catch (Exception ignored) {}
     }
 
     @Override

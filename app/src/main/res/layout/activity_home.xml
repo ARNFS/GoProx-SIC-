@@ -14,7 +14,6 @@
         app:titleTextColor="@android:color/white"
         android:elevation="4dp" />
 
-    <!-- ⬇️ ДОБАВЛЕНО: Контейнер карты -->
     <FrameLayout
         android:id="@+id/mapContainer"
         android:layout_width="match_parent"
@@ -29,7 +28,6 @@
             android:layout_height="match_parent" />
     </FrameLayout>
 
-    <!-- Оригинальный контейнер списка (оставлен без изменений) -->
     <LinearLayout
         android:id="@+id/listContainer"
         android:layout_width="match_parent"
@@ -48,11 +46,13 @@
             android:textColor="@color/black"
             android:layout_marginBottom="12dp" />
 
+        <!-- Search + AI + Filter -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="16dp"
+            android:gravity="center_vertical">
 
             <EditText
                 android:id="@+id/etSearch"
@@ -64,15 +64,27 @@
                 android:padding="12dp"
                 android:background="@drawable/bg_message_input" />
 
+            <!-- AI կոճակ -->
             <ImageView
                 android:id="@+id/ivAIToggle"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/ic_ai"
-                android:padding="8dp"
-                android:layout_marginStart="8dp"
+                android:padding="6dp"
+                android:layout_marginStart="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 app:tint="@color/primary" />
+
+            <!-- FILTER կոճակ (ՔՈ PNG) -->
+            <ImageView
+                android:id="@+id/ivFilter"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/qashac"
+                android:padding="6dp"
+                android:layout_marginStart="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
