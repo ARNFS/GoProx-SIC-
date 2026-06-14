@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/white"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Edit Profile"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Profile Photo -->
+    <de.hdodenhof.circleimageview.CircleImageView
+        android:id="@+id/ivEditProfilePhoto"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_profile_placeholder"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnChangePhoto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Change Photo"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:layout_gravity="center"
+        android:layout_marginBottom="24dp"
+        android:backgroundTint="@color/primary"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp"
+        app:cornerRadius="20dp" />
+
+    <!-- Name -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Name"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/etEditName"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="Enter your name"
+        android:padding="12dp"
+        android:background="@drawable/bg_message_input"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Email (read-only) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Email (cannot be changed)"
+        android:textSize="14sp"
+        android:textColor="@color/gray"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/tvEditEmail"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@drawable/bg_message_input"
+        android:textColor="@color/dark_gray"
+        android:textSize="16sp" />
+
+    <!-- Save Button -->
+    <Button
+        android:id="@+id/btnSaveProfile"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:text="Save Changes"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="32dp"
+        android:background="@drawable/bg_apply_button" />
+
+</LinearLayout>

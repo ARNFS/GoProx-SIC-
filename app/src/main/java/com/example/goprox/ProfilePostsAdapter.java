@@ -15,13 +15,22 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
 
     private List<Service> postList;
     private OnItemClickListener listener;
+    private OnItemLongClickListener longClickListener;
 
     public interface OnItemClickListener {
         void onItemClick(int position);
     }
 
+    public interface OnItemLongClickListener {
+        void onItemLongClick(int position);
+    }
+
     public void setOnItemClickListener(OnItemClickListener listener) {
         this.listener = listener;
+    }
+
+    public void setOnItemLongClickListener(OnItemLongClickListener longClickListener) {
+        this.longClickListener = longClickListener;
     }
 
     public ProfilePostsAdapter(List<Service> postList) {
@@ -33,7 +42,7 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_profile_post, parent, false);
-        return new ViewHolder(view, listener);
+        return new ViewHolder(view, listener, longClickListener);
     }
 
     @Override
@@ -68,7 +77,7 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
         TextView tvTitle, tvProfession, tvPrice;
         CardView cardView;
 
-        ViewHolder(@NonNull View itemView, OnItemClickListener listener) {
+        ViewHolder(@NonNull View itemView, OnItemClickListener clickListener, OnItemLongClickListener longClickListener) {
             super(itemView);
             tvTitle = itemView.findViewById(R.id.tvPostTitle);
             tvProfession = itemView.findViewById(R.id.tvPostProfession);
@@ -76,12 +85,24 @@ public class ProfilePostsAdapter extends RecyclerView.Adapter<ProfilePostsAdapte
             cardView = itemView.findViewById(R.id.cardView);
 
             itemView.setOnClickListener(v -> {
-                if (listener != null) {
+                if (clickListener != null) {
                     int position = getAdapterPosition();
                     if (position != RecyclerView.NO_POSITION) {
-                        listener.onItemClick(position);
+                        clickListener.onItemClick(position);
                     }
                 }
+            });
+
+            // 🔥 LONG CLICK
+            itemView.setOnLongClickListener(v -> {
+                if (longClickListener != null) {
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION) {
+                        longClickListener.onItemLongClick(position);
+                        return true;
+                    }
+                }
+                return false;
             });
         }
     }

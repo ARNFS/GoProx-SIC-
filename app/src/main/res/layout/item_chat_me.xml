@@ -14,7 +14,7 @@
         android:orientation="vertical"
         android:background="@drawable/bg_message_me"
         android:padding="10dp"
-        android:maxWidth="260dp">
+        android:maxWidth="280dp">
 
         <ImageView
             android:id="@+id/ivImage"
@@ -29,17 +29,149 @@
             android:layout_height="wrap_content"
             android:text=""
             android:textSize="14sp"
-            android:textColor="@android:color/black" />
+            android:textColor="@android:color/black"
+            android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/tvTime"
+        <!-- FILE MESSAGE UI -->
+        <LinearLayout
+            android:id="@+id/llFile"
+            android:layout_width="240dp"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/ivFileIcon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/file_pdf"
+                android:layout_marginEnd="8dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvFileName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="file.pdf"
+                    android:textSize="13sp"
+                    android:textColor="@android:color/black"
+                    android:maxLines="1"
+                    android:ellipsize="middle" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvFileSize"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="2.5 MB"
+                        android:textSize="11sp"
+                        android:textColor="#666"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvFileExtension"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="PDF"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="#1565C0"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
+
+                <!-- Upload progress -->
+                <ProgressBar
+                    android:id="@+id/pbUpload"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="4dp"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvUploadProgress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="45%"
+                    android:textSize="10sp"
+                    android:textColor="#1565C0"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- VOICE MESSAGE UI -->
+        <LinearLayout
+            android:id="@+id/llVoice"
+            android:layout_width="240dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageButton
+                    android:id="@+id/btnPlayPause"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_play"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+
+                <SeekBar
+                    android:id="@+id/seekBar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginHorizontal="4dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textSize="10sp"
+                android:textColor="#666"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="10sp"
-            android:textColor="#666"
+            android:orientation="horizontal"
             android:layout_gravity="end"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="4dp">
 
+            <TextView
+                android:id="@+id/tvTicks"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✓"
+                android:textSize="10sp"
+                android:textColor="#999"
+                android:layout_marginEnd="2dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="10sp"
+                android:textColor="#666" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

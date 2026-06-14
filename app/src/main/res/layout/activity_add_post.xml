@@ -75,17 +75,32 @@
                 android:background="@drawable/bg_message_input"
                 android:layout_marginBottom="12dp" />
 
-            <EditText
-                android:id="@+id/etPrice"
+            <!-- Price Type Dropdown + Price Input -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Price ($/hour)"
-                android:inputType="number"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="12dp" />
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
 
-            <!-- Новые поля для ручного ввода страны и города -->
+                <EditText
+                    android:id="@+id/etPrice"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Price"
+                    android:inputType="number"
+                    android:padding="12dp"
+                    android:background="@drawable/bg_message_input" />
+
+                <Spinner
+                    android:id="@+id/spinnerPriceType"
+                    android:layout_width="130dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_message_input"
+                    android:padding="12dp" />
+            </LinearLayout>
+
             <EditText
                 android:id="@+id/etCountry"
                 android:layout_width="match_parent"

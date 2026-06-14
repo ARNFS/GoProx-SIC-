@@ -147,19 +147,16 @@ public class FirebaseService {
                 });
     }
 
-    // For QueryDocumentSnapshot (from collection queries)
     private Service parseQueryDocument(QueryDocumentSnapshot doc) {
         if (doc == null) return null;
         return parseData(doc.getId(), doc);
     }
 
-    // For DocumentSnapshot (from single document get)
     private Service parseDocumentSnapshot(DocumentSnapshot doc) {
         if (doc == null) return null;
         return parseData(doc.getId(), doc);
     }
 
-    // Common parser
     private Service parseData(String serviceId, DocumentSnapshot document) {
         if (document == null) return null;
 
@@ -168,6 +165,7 @@ public class FirebaseService {
             String profession = document.getString("profession");
             String description = document.getString("description");
             String price = document.getString("price");
+            String priceType = document.getString("priceType");
             Double rating = document.getDouble("rating");
             Long ratingCountLong = document.getLong("ratingCount");
             String userId = document.getString("userId");
@@ -183,7 +181,7 @@ public class FirebaseService {
             int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
             float ratingValue = rating != null ? rating.floatValue() : 0f;
 
-            return new Service(
+            Service service = new Service(
                     serviceId,
                     name != null ? name : "Unknown",
                     profession != null ? profession : "Unknown",
@@ -199,6 +197,8 @@ public class FirebaseService {
                     country,
                     city
             );
+            if (priceType != null) service.setPriceType(priceType);
+            return service;
         } catch (Exception e) {
             return null;
         }

@@ -2,6 +2,10 @@ package com.example.goprox;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.Html;
+import android.text.method.LinkMovementMethod;
+import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -18,13 +22,14 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ServiceDetailActivity extends AppCompatActivity {
+public class ServiceDetailActivity extends BaseActivity {
 
     private ImageView ivProfile;
     private TextView tvName, tvProfession, tvDescription, tvPrice;
@@ -37,11 +42,15 @@ public class ServiceDetailActivity extends AppCompatActivity {
 
     private FirebaseFirestore db;
     private String serviceId, otherUserId, serviceName, currentUserId;
+    private boolean hasAlreadyReviewed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_service_detail);
+
+        // 🔥 Keyboard-ը չծածկի EditText-ը
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         db = FirebaseFirestore.getInstance();
 
@@ -58,6 +67,7 @@ public class ServiceDetailActivity extends AppCompatActivity {
         loadDataFromIntent();
         setupButtons();
         setupReviewButton();
+        checkIfAlreadyReviewed();
         loadReviews();
     }
 
@@ -89,6 +99,8 @@ public class ServiceDetailActivity extends AppCompatActivity {
         }
 
         recyclerViewReviews.setLayoutManager(new LinearLayoutManager(this));
+        // 🔥 Nested scrolling enabled — հեշտ scroll
+        recyclerViewReviews.setNestedScrollingEnabled(true);
         reviewAdapter = new ReviewAdapter(new ArrayList<>());
         recyclerViewReviews.setAdapter(reviewAdapter);
     }
@@ -132,7 +144,12 @@ public class ServiceDetailActivity extends AppCompatActivity {
                 tvProfession.setTextColor(getResources().getColor(R.color.blue, getTheme()));
             } catch (Exception ignored) {}
         }
-        if (tvDescription != null) tvDescription.setText(description != null ? description : "");
+        if (tvDescription != null) {
+            String desc = description != null ? description : "";
+            tvDescription.setLinksClickable(true);
+            tvDescription.setMovementMethod(LinkMovementMethod.getInstance());
+            tvDescription.setText(Html.fromHtml(desc, Html.FROM_HTML_MODE_LEGACY));
+        }
         if (tvPrice != null) tvPrice.setText(price != null ? price : "");
         if (ratingBar != null) ratingBar.setRating(rating);
         if (tvRatingText != null) tvRatingText.setText(String.format("%.1f", rating));
@@ -150,15 +167,11 @@ public class ServiceDetailActivity extends AppCompatActivity {
                     if (doc != null && doc.exists()) {
                         otherUserId = doc.getString("userId");
                         if (otherUserId == null || otherUserId.isEmpty()) {
-                            Toast.makeText(this,
-                                    "Error: specialist ID missing",
-                                    Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Error: specialist ID missing", Toast.LENGTH_SHORT).show();
                         }
                     }
                 })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this,
-                                "Failed to load user", Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e -> Toast.makeText(this, "Failed to load user", Toast.LENGTH_SHORT).show());
     }
 
     private void setupButtons() {
@@ -168,11 +181,9 @@ public class ServiceDetailActivity extends AppCompatActivity {
                     Toast.makeText(this, "Loading specialist info...", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                // 🔥 Օգտագործում ենք CallHelper-ը, profession-ը որպես serviceTitle
                 String title = tvProfession != null ? tvProfession.getText().toString() : "";
                 CallHelper.startCall(this, otherUserId,
-                        tvName != null ? tvName.getText().toString() : "User",
-                        title);
+                        tvName != null ? tvName.getText().toString() : "User", title);
             });
         }
         if (btnMessage != null) {
@@ -195,25 +206,46 @@ public class ServiceDetailActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    // 🔥 CHECK IF ALREADY REVIEWED
+    private void checkIfAlreadyReviewed() {
+        if (serviceId == null || currentUserId == null) return;
+
+        db.collection("services").document(serviceId)
+                .collection("reviews")
+                .whereEqualTo("userId", currentUserId)
+                .get()
+                .addOnSuccessListener(snapshots -> {
+                    if (!snapshots.isEmpty()) {
+                        hasAlreadyReviewed = true;
+                        if (btnSubmitReview != null) btnSubmitReview.setEnabled(false);
+                        if (btnSubmitReview != null) btnSubmitReview.setText("Already Reviewed");
+                        if (ratingBarUser != null) ratingBarUser.setIsIndicator(true);
+                        if (etReview != null) etReview.setEnabled(false);
+                        if (etReview != null) etReview.setHint("You have already reviewed");
+                    }
+                });
+    }
+
     private void setupReviewButton() {
         if (btnSubmitReview == null) return;
 
         btnSubmitReview.setOnClickListener(v -> {
-            if (etReview == null || ratingBarUser == null) return;
+            if (hasAlreadyReviewed) {
+                Toast.makeText(this, "You have already reviewed this service", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-            String text = etReview.getText().toString().trim();
-            float userRating = ratingBarUser.getRating();
+            float userRating = ratingBarUser != null ? ratingBarUser.getRating() : 0;
+            String text = etReview != null ? etReview.getText().toString().trim() : "";
 
-            if (text.isEmpty() || userRating == 0) {
-                Toast.makeText(this,
-                        "Please enter a review and rating",
-                        Toast.LENGTH_SHORT).show();
+            // 🔥 ԿԱՐԵԼԻ Ա ԴԱՏԱՐԿ REVIEW (միայն rating)
+            if (userRating == 0) {
+                Toast.makeText(this, "Please select a rating", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             String userName = FirebaseAuth.getInstance().getCurrentUser() != null
-                    ? FirebaseAuth.getInstance().getCurrentUser().getDisplayName()
-                    : null;
+                    ? FirebaseAuth.getInstance().getCurrentUser().getDisplayName() : null;
             if (userName == null) userName = "User";
 
             Map<String, Object> review = new HashMap<>();
@@ -223,17 +255,24 @@ public class ServiceDetailActivity extends AppCompatActivity {
             review.put("comment", text);
             review.put("timestamp", System.currentTimeMillis());
 
+            btnSubmitReview.setEnabled(false);
+            btnSubmitReview.setText("Submitting...");
+
             db.collection("services").document(serviceId)
                     .collection("reviews")
                     .add(review)
                     .addOnSuccessListener(doc -> {
+                        hasAlreadyReviewed = true;
                         Toast.makeText(this, "Review added", Toast.LENGTH_SHORT).show();
-                        etReview.setText("");
-                        ratingBarUser.setRating(0);
+                        if (etReview != null) etReview.setText("");
+                        if (ratingBarUser != null) ratingBarUser.setRating(0);
+                        btnSubmitReview.setText("Already Reviewed");
                         updateServiceRating();
                         loadReviews();
                     })
                     .addOnFailureListener(e -> {
+                        btnSubmitReview.setEnabled(true);
+                        btnSubmitReview.setText("Submit Review");
                         Toast.makeText(this, "Failed to add review", Toast.LENGTH_SHORT).show();
                     });
         });
@@ -244,8 +283,7 @@ public class ServiceDetailActivity extends AppCompatActivity {
 
         db.collection("services").document(serviceId)
                 .collection("reviews")
-                .orderBy("timestamp",
-                        com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(snapshots -> {
                     List<Review> reviews = new ArrayList<>();
@@ -292,10 +330,8 @@ public class ServiceDetailActivity extends AppCompatActivity {
                     db.collection("services").document(serviceId).update(updates);
 
                     if (ratingBar != null) ratingBar.setRating(newAvg);
-                    if (tvRatingText != null)
-                        tvRatingText.setText(String.format("%.1f", newAvg));
-                    if (tvRatingCount != null)
-                        tvRatingCount.setText("(" + count + " reviews)");
+                    if (tvRatingText != null) tvRatingText.setText(String.format("%.1f", newAvg));
+                    if (tvRatingCount != null) tvRatingCount.setText("(" + count + " reviews)");
                 });
     }
 

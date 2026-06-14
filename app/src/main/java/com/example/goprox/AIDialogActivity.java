@@ -78,12 +78,12 @@ public class AIDialogActivity extends BaseActivity {
 
         firebaseService = new FirebaseService();
 
-        addMessage("🔧 AI is ready. Describe what you need.", false);
+        addMessage("🔧 AI is ready. Describe what you need.", false, 0);
 
         btnSend.setOnClickListener(v -> {
             String text = etUserInput.getText().toString().trim();
             if (!text.isEmpty()) {
-                addMessage(text, true);
+                addMessage(text, true, 0);
                 etUserInput.setText("");
                 analyzeProblem(text);
             }
@@ -98,7 +98,7 @@ public class AIDialogActivity extends BaseActivity {
 
     private void analyzeProblem(String problem) {
         if (!canMakeRequest()) {
-            addMessage("⏳ Please wait 1 second before sending another request.", false);
+            addMessage("⏳ Please wait 1 second before sending another request.", false, 0);
             return;
         }
 
@@ -118,7 +118,7 @@ public class AIDialogActivity extends BaseActivity {
             if (services.isEmpty()) {
                 runOnUiThread(() -> {
                     llChatContainer.removeView(thinking);
-                    addMessage("❌ No professionals found. Please add services first.", false);
+                    addMessage("❌ No professionals found. Please add services first.", false, 0);
                 });
                 return;
             }
@@ -127,24 +127,34 @@ public class AIDialogActivity extends BaseActivity {
             for (Service s : services) {
                 sb.append("TITLE: ").append(s.getProfession()).append("\n");
                 sb.append("DESCRIPTION: ").append(s.getDescription()).append("\n");
+                sb.append("RATING: ").append(s.getRating()).append("/5\n");
                 if (s.getTags() != null && !s.getTags().isEmpty()) {
                     sb.append("TAGS: ").append(TextUtils.join(", ", s.getTags())).append("\n");
                 }
                 sb.append("\n");
             }
 
-            String prompt = "You are a precise matchmaker.\n\n" +
+            // 🔥 Ավելի խելացի prompt
+            String prompt = "You are an expert matchmaker for a service-finding app called GoProx.\n" +
+                    "Your job is to find the BEST matching professionals for the user's request.\n\n" +
+                    "RULES:\n" +
+                    "1. Return ONLY the TITLE(s) that match, separated by commas\n" +
+                    "2. If NO match at all, return exactly: NOT_FOUND\n" +
+                    "3. Consider synonyms (e.g. \"plumber\" = \"pipe repair\", \"electrician\" = \"wiring\")\n" +
+                    "4. Consider the user's INTENT, not just keywords\n" +
+                    "5. Rate your confidence in each match from 0-100%\n\n" +
                     "USER REQUEST: \"" + problem + "\"\n\n" +
                     "AVAILABLE PROFESSIONALS:\n" + sb.toString() +
-                    "Return ONLY the TITLE(s) that best match the user's request, separated by commas.\n" +
-                    "If none match, return NOT_FOUND.\n\n" +
+                    "FORMAT: Return in format: TITLE1|CONFIDENCE1, TITLE2|CONFIDENCE2\n" +
+                    "Example: Plumber|95, Electrician|40\n" +
+                    "If none match: NOT_FOUND\n\n" +
                     "Your answer:";
 
             try {
                 JSONObject json = new JSONObject();
                 json.put("model", "llama-3.3-70b-versatile");
                 json.put("temperature", 0.1);
-                json.put("max_tokens", 100);
+                json.put("max_tokens", 150);
 
                 JSONArray messages = new JSONArray();
                 JSONObject userMsg = new JSONObject();
@@ -165,7 +175,7 @@ public class AIDialogActivity extends BaseActivity {
                     public void onFailure(Call call, IOException e) {
                         runOnUiThread(() -> {
                             llChatContainer.removeView(thinking);
-                            addMessage("❌ Network error: " + e.getMessage(), false);
+                            addMessage("❌ Network error: " + e.getMessage(), false, 0);
                         });
                     }
 
@@ -176,7 +186,7 @@ public class AIDialogActivity extends BaseActivity {
                             llChatContainer.removeView(thinking);
                             try {
                                 if (!response.isSuccessful()) {
-                                    addMessage("❌ API error: " + response.code(), false);
+                                    addMessage("❌ API error: " + response.code(), false, 0);
                                     return;
                                 }
 
@@ -189,51 +199,45 @@ public class AIDialogActivity extends BaseActivity {
 
                                 Log.d("AIDialog", "AI raw: " + raw);
                                 if (raw.isEmpty() || raw.equalsIgnoreCase("NOT_FOUND")) {
-                                    addMessage("😔 No matching professional found.", false);
+                                    addMessage("😔 No matching professional found.", false, 0);
                                     return;
                                 }
 
+                                // Parse format: "TITLE1|CONFIDENCE1, TITLE2|CONFIDENCE2"
                                 String[] parts = raw.split(",");
-                                ArrayList<String> aiTitles = new ArrayList<>();
-                                for (String p : parts) {
-                                    String t = p.trim();
-                                    if (!t.isEmpty()) aiTitles.add(t);
-                                }
-
-                                String lowerProblem = problem.toLowerCase();
-                                boolean wantIos = lowerProblem.contains("iphone") || lowerProblem.contains("ios") || lowerProblem.contains("apple");
-                                boolean wantAndroid = lowerProblem.contains("android") || lowerProblem.contains("google play");
-
                                 ArrayList<String> finalTitles = new ArrayList<>();
-                                for (String title : aiTitles) {
-                                    Service matched = null;
-                                    for (Service s : services) {
-                                        if (s.getProfession().equalsIgnoreCase(title)) {
-                                            matched = s;
-                                            break;
+                                StringBuilder confidenceInfo = new StringBuilder();
+
+                                for (String p : parts) {
+                                    String[] titleConf = p.trim().split("\\|");
+                                    if (titleConf.length >= 2) {
+                                        String title = titleConf[0].trim();
+                                        String confidence = titleConf[1].trim().replaceAll("[^0-9]", "");
+                                        if (!title.isEmpty() && !confidence.isEmpty()) {
+                                            finalTitles.add(title);
+                                            int conf = Integer.parseInt(confidence);
+                                            confidenceInfo.append(title).append(": ").append(conf).append("% match\n");
                                         }
+                                    } else {
+                                        String t = p.trim();
+                                        if (!t.isEmpty()) finalTitles.add(t);
                                     }
-                                    if (matched == null) continue;
-
-                                    String fullText = (matched.getProfession() + " " + matched.getDescription()).toLowerCase();
-                                    if (matched.getTags() != null) {
-                                        for (String tag : matched.getTags()) fullText += " " + tag.toLowerCase();
-                                    }
-
-                                    boolean keep = true;
-                                    if (wantIos && !(fullText.contains("ios") || fullText.contains("iphone") || fullText.contains("swift"))) keep = false;
-                                    if (wantAndroid && !(fullText.contains("android") || fullText.contains("java") || fullText.contains("kotlin"))) keep = false;
-                                    if (keep) finalTitles.add(title);
                                 }
 
                                 if (finalTitles.isEmpty()) {
-                                    addMessage("😔 No matching professional found after filtering.", false);
+                                    addMessage("😔 No matching professional found.", false, 0);
                                     return;
                                 }
 
-                                addMessage("✅ Found: " + TextUtils.join(", ", finalTitles), false);
+                                // 🔥 Ցույց ենք տալիս արդյունքները + վստահության %
+                                String resultMessage = "✅ Found:\n" + confidenceInfo.toString();
+                                addMessage(resultMessage, false, 0);
 
-                                // 🔥 FIX: FLAG_ACTIVITY_SINGLE_TOP — որ HomeActivity-ն նոր Intent ստանա
+                                // 🔥 AI-ի գնահատականը (average confidence)
+                                int avgConfidence = calculateAverageConfidence(confidenceInfo.toString());
+                                String ratingStars = getStarRating(avgConfidence);
+                                addMessage("📊 AI Confidence: " + avgConfidence + "% " + ratingStars, false, 0);
+
                                 Intent intent = new Intent(AIDialogActivity.this, HomeActivity.class);
                                 intent.putStringArrayListExtra("profession_filter_list", finalTitles);
                                 intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -241,7 +245,7 @@ public class AIDialogActivity extends BaseActivity {
                                 finish();
 
                             } catch (Exception e) {
-                                addMessage("❌ Error: " + e.getMessage(), false);
+                                addMessage("❌ Error: " + e.getMessage(), false, 0);
                             }
                         });
                     }
@@ -249,13 +253,41 @@ public class AIDialogActivity extends BaseActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     llChatContainer.removeView(thinking);
-                    addMessage("❌ Error: " + e.getMessage(), false);
+                    addMessage("❌ Error: " + e.getMessage(), false, 0);
                 });
             }
         });
     }
 
-    private void addMessage(String text, boolean isUser) {
+    // 🔥 Calculate average confidence
+    private int calculateAverageConfidence(String confidenceInfo) {
+        try {
+            String[] lines = confidenceInfo.split("\n");
+            int total = 0, count = 0;
+            for (String line : lines) {
+                String[] parts = line.split(": ");
+                if (parts.length >= 2) {
+                    String num = parts[1].replaceAll("[^0-9]", "");
+                    if (!num.isEmpty()) {
+                        total += Integer.parseInt(num);
+                        count++;
+                    }
+                }
+            }
+            return count > 0 ? total / count : 0;
+        } catch (Exception e) { return 0; }
+    }
+
+    // 🔥 Star rating based on confidence
+    private String getStarRating(int confidence) {
+        if (confidence >= 90) return "⭐⭐⭐⭐⭐";
+        if (confidence >= 70) return "⭐⭐⭐⭐";
+        if (confidence >= 50) return "⭐⭐⭐";
+        if (confidence >= 30) return "⭐⭐";
+        return "⭐";
+    }
+
+    private void addMessage(String text, boolean isUser, int confidence) {
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(16);

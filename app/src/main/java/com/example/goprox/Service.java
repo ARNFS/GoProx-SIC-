@@ -12,6 +12,7 @@ public class Service {
     private String country;
     private String city;
     private String price;
+    private String priceType; // "$/hour", "Fixed", "Depends on problem"
     private float rating;
     private int ratingCount;
     private String imageUrl;
@@ -20,7 +21,6 @@ public class Service {
 
     public Service() {}
 
-    // Старый конструктор (без координат) – для обратной совместимости
     public Service(String id, String name, String profession, String description,
                    String price, float rating, int ratingCount, String imageUrl,
                    String userId, List<String> tags) {
@@ -38,9 +38,9 @@ public class Service {
         this.longitude = 0.0;
         this.country = null;
         this.city = null;
+        this.priceType = "$/hour";
     }
 
-    // Новый конструктор (с координатами и адресом)
     public Service(String id, String name, String profession, String description,
                    String price, float rating, int ratingCount, String imageUrl,
                    String userId, List<String> tags, double latitude, double longitude,
@@ -59,8 +59,10 @@ public class Service {
         this.longitude = longitude;
         this.country = country;
         this.city = city;
+        this.priceType = "$/hour";
     }
 
+    // Getters & Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getName() { return name; }
@@ -71,6 +73,8 @@ public class Service {
     public void setDescription(String description) { this.description = description; }
     public String getPrice() { return price; }
     public void setPrice(String price) { this.price = price; }
+    public String getPriceType() { return priceType; }
+    public void setPriceType(String priceType) { this.priceType = priceType; }
     public float getRating() { return rating; }
     public void setRating(float rating) { this.rating = rating; }
     public int getRatingCount() { return ratingCount; }

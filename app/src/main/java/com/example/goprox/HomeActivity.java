@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -13,9 +12,11 @@ import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import androidx.core.content.ContextCompat;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RatingBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,12 +37,14 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,14 +71,13 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
     private FusedLocationProviderClient fusedLocationClient;
     private final Map<String, Service> markerServiceMap = new HashMap<>();
 
-    // Filter state
     private Set<String> selectedProfessions = new HashSet<>();
     private int minPrice = -1, maxPrice = -1;
     private float minRating = 0;
     private String filterCity = "", filterCountry = "";
+    private int sortBy = 0;
     private boolean isFiltered = false;
 
-    // City/Country lists
     private List<String> cityList = new ArrayList<>();
     private List<String> countryList = new ArrayList<>();
 
@@ -100,6 +102,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         setupSearch();
         setupBottomNavigation();
         setupItemClickListener();
+        setupLongClickListener();
     }
 
     @Override
@@ -112,7 +115,6 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         }
     }
 
-    // 🔥 Բեռնում ենք city/country ցուցակները
     private void loadCityCountryLists() {
         cityList = readRawFile(R.raw.cities);
         countryList = readRawFile(R.raw.countries);
@@ -260,7 +262,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                     synchronized (serviceList) {
                         serviceList.clear();
                         serviceList.addAll(originalServiceList);
-                        sortServices(serviceList);
+                        applySorting(serviceList);
                     }
                     if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
                 }
@@ -288,7 +290,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 }
             }
         }
-        sortServices(filtered);
+        applySorting(filtered);
         synchronized (serviceList) { serviceList.clear(); serviceList.addAll(filtered); }
         if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
     }
@@ -329,17 +331,26 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 filtered.add(s);
             }
         }
-        sortServices(filtered);
+        applySorting(filtered);
         synchronized (serviceList) { serviceList.clear(); serviceList.addAll(filtered); }
         if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
     }
 
-    private void sortServices(List<Service> list) {
+    private void applySorting(List<Service> list) {
         if (list == null) return;
-        Collections.sort(list, (a, b) -> {
-            if (a == null || b == null) return 0;
-            return Float.compare(b.getRating(), a.getRating());
-        });
+        switch (sortBy) {
+            case 0: Collections.sort(list, (a, b) -> Float.compare(b != null ? b.getRating() : 0, a != null ? a.getRating() : 0)); break;
+            case 1: Collections.sort(list, (a, b) -> Float.compare(a != null ? a.getRating() : 0, b != null ? b.getRating() : 0)); break;
+            case 2: Collections.sort(list, Comparator.comparingInt(s -> extractPrice(s))); break;
+            case 3: Collections.sort(list, (a, b) -> Integer.compare(extractPrice(b), extractPrice(a))); break;
+            case 4: Collections.sort(list, (a, b) -> (a != null ? a.getName() : "").compareToIgnoreCase(b != null ? b.getName() : "")); break;
+            case 5: Collections.sort(list, (a, b) -> (b != null ? b.getName() : "").compareToIgnoreCase(a != null ? a.getName() : "")); break;
+        }
+    }
+
+    private int extractPrice(Service s) {
+        if (s == null) return 0;
+        try { String priceStr = s.getPrice() != null ? s.getPrice().replaceAll("[^0-9]", "") : "0"; return priceStr.isEmpty() ? 0 : Integer.parseInt(priceStr); } catch (Exception e) { return 0; }
     }
 
     private void updateEmptyView() {
@@ -365,6 +376,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         EditText etMinPrice = view.findViewById(R.id.etMinPrice);
         EditText etMaxPrice = view.findViewById(R.id.etMaxPrice);
         RatingBar ratingBarFilter = view.findViewById(R.id.ratingBarFilter);
+        Spinner spinnerSortBy = view.findViewById(R.id.spinnerSortBy);
         AutoCompleteTextView etCity = view.findViewById(R.id.etCity);
         AutoCompleteTextView etCountry = view.findViewById(R.id.etCountry);
         Button btnApply = view.findViewById(R.id.btnApplyFilter);
@@ -375,6 +387,12 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
 
         ArrayAdapter<String> countryAdapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, countryList);
         etCountry.setAdapter(countryAdapter);
+
+        String[] sortOptions = {"Rating (High-Low)", "Rating (Low-High)", "Price (Low-High)", "Price (High-Low)", "Name (A-Z)", "Name (Z-A)"};
+        ArrayAdapter<String> sortAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, sortOptions);
+        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerSortBy.setAdapter(sortAdapter);
+        spinnerSortBy.setSelection(sortBy);
 
         if (minPrice >= 0) etMinPrice.setText(String.valueOf(minPrice));
         if (maxPrice >= 0) etMaxPrice.setText(String.valueOf(maxPrice));
@@ -408,11 +426,22 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
             try { minPrice = etMinPrice.getText().toString().isEmpty() ? -1 : Integer.parseInt(etMinPrice.getText().toString()); } catch (Exception e) { minPrice = -1; }
             try { maxPrice = etMaxPrice.getText().toString().isEmpty() ? -1 : Integer.parseInt(etMaxPrice.getText().toString()); } catch (Exception e) { maxPrice = -1; }
             minRating = ratingBarFilter.getRating();
+            sortBy = spinnerSortBy.getSelectedItemPosition();
             filterCity = etCity.getText().toString().trim();
             filterCountry = etCountry.getText().toString().trim();
 
-            isFiltered = !selectedProfessions.isEmpty() || minPrice >= 0 || maxPrice >= 0 || minRating > 0 || !filterCity.isEmpty() || !filterCountry.isEmpty();
-            applyManualFilter();
+            isFiltered = !selectedProfessions.isEmpty() || minPrice >= 0 || maxPrice >= 0 || minRating > 0 || !filterCity.isEmpty() || !filterCountry.isEmpty() || sortBy != 0;
+
+            if (isFiltered) {
+                applyManualFilter();
+            } else {
+                synchronized (serviceList) {
+                    serviceList.clear();
+                    serviceList.addAll(originalServiceList);
+                    applySorting(serviceList);
+                }
+                if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
+            }
             updateEmptyView();
             addMarkersToMap();
             dialog.dismiss();
@@ -421,21 +450,25 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         btnReset.setOnClickListener(v -> {
             selectedProfessions.clear();
             minPrice = -1; maxPrice = -1; minRating = 0;
-            filterCity = ""; filterCountry = ""; isFiltered = false;
+            filterCity = ""; filterCountry = ""; sortBy = 0; isFiltered = false;
             etMinPrice.setText(""); etMaxPrice.setText("");
             ratingBarFilter.setRating(0);
             etCity.setText(""); etCountry.setText("");
+            spinnerSortBy.setSelection(0);
             for (int i = 0; i < llProfessions.getChildCount(); i++) {
                 View child = llProfessions.getChildAt(i);
                 if (child instanceof CheckBox) ((CheckBox) child).setChecked(false);
             }
-            synchronized (serviceList) { serviceList.clear(); serviceList.addAll(originalServiceList); sortServices(serviceList); }
+            synchronized (serviceList) {
+                serviceList.clear();
+                serviceList.addAll(originalServiceList);
+                applySorting(serviceList);
+            }
             if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
             updateEmptyView();
             addMarkersToMap();
         });
 
-        // 🔥 Որ keyboard-ը dialog-ը վերև հրի
         if (dialog.getWindow() != null) {
             dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
@@ -466,7 +499,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 }
             }
         }
-        sortServices(filtered);
+        applySorting(filtered);
         serviceAdapter.updateList(filtered);
         synchronized (serviceList) { serviceList.clear(); serviceList.addAll(filtered); }
         updateEmptyView();
@@ -497,6 +530,116 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         });
     }
 
+    // 🔥 LONG CLICK — RENAME / DELETE
+    private void setupLongClickListener() {
+        if (serviceAdapter == null) return;
+        String currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+                ? FirebaseAuth.getInstance().getCurrentUser().getUid() : null;
+
+        serviceAdapter.setOnItemLongClickListener(position -> {
+            synchronized (serviceList) {
+                if (position < 0 || position >= serviceList.size()) return;
+                Service s = serviceList.get(position);
+                if (s == null || currentUserId == null) return;
+
+                if (!currentUserId.equals(s.getUserId())) {
+                    Toast.makeText(this, "This is not your service", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                showRenameDeleteDialog(s, position);
+            }
+        });
+    }
+
+    private void showRenameDeleteDialog(Service service, int position) {
+        String[] options = {"Edit", "Delete"};
+        new AlertDialog.Builder(this)
+                .setTitle(service.getName())
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        // 🔥 Open AddPostActivity in Edit Mode
+                        Intent intent = new Intent(HomeActivity.this, AddPostActivity.class);
+                        intent.putExtra("serviceId", service.getId());
+                        intent.putExtra("name", service.getName());
+                        intent.putExtra("profession", service.getProfession());
+                        intent.putExtra("description", service.getDescription());
+                        intent.putExtra("price", service.getPrice());
+                        intent.putExtra("country", service.getCountry());
+                        intent.putExtra("city", service.getCity());
+                        intent.putExtra("imageUrl", service.getImageUrl());
+                        startActivity(intent);
+                    } else if (which == 1) {
+                        showDeleteConfirmation(service, position);
+                    }
+                })
+                .show();
+    }
+
+    private void showRenameDialog(Service service, int position) {
+        EditText input = new EditText(this);
+        input.setText(service.getName());
+        input.setPadding(32, 16, 32, 16);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Rename Service")
+                .setView(input)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newName = input.getText().toString().trim();
+                    if (!newName.isEmpty()) {
+                        FirebaseFirestore.getInstance()
+                                .collection("services").document(service.getId())
+                                .update("name", newName)
+                                .addOnSuccessListener(v -> {
+                                    service.setName(newName);
+                                    serviceAdapter.notifyItemChanged(position);
+                                    Toast.makeText(this, "Renamed!", Toast.LENGTH_SHORT).show();
+                                });
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showDeleteConfirmation(Service service, int position) {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Delete Service")
+                .setMessage("Are you sure you want to delete \"" + service.getName() + "\"?")
+                .setIcon(R.drawable.ic_warning)
+                .setPositiveButton("Delete", (d, which) -> {
+                    if (firebaseService != null) {
+                        firebaseService.deleteService(service.getId(), new FirebaseService.OnDeleteListener() {
+                            @Override
+                            public void onSuccess() {
+                                runOnUiThread(() -> {
+                                    synchronized (serviceList) {
+                                        serviceList.remove(position);
+                                        originalServiceList.remove(service);
+                                    }
+                                    serviceAdapter.notifyItemRemoved(position);
+                                    updateEmptyView();
+                                    addMarkersToMap();
+                                    Toast.makeText(HomeActivity.this, "Deleted!", Toast.LENGTH_SHORT).show();
+                                });
+                            }
+
+                            @Override
+                            public void onFailure(String error) {
+                                runOnUiThread(() -> {
+                                    Toast.makeText(HomeActivity.this, "Delete failed: " + error, Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        });
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+        dialog.show();
+        try {
+            int yellowColor = ContextCompat.getColor(this, android.R.color.holo_orange_dark);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(yellowColor);
+        } catch (Exception ignored) {}
+    }
     @Override
     protected void onDestroy() {
         super.onDestroy();

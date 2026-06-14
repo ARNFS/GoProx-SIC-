@@ -34,29 +34,6 @@
                 android:layout_height="120dp"
                 android:src="@drawable/ic_person"
                 android:layout_marginBottom="16dp" />
-            <TextView
-                android:id="@+id/tvMemberSince"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Member since ..."
-                android:textSize="14sp"
-                android:textColor="@color/gray"
-                android:layout_marginTop="4dp" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvMyPosts"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" />
-
-            <TextView
-                android:id="@+id/tvNoPosts"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No services yet"
-                android:textSize="14sp"
-                android:textColor="@color/gray"
-                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvProfileName"
@@ -75,6 +52,15 @@
                 android:text="user@email.com"
                 android:textSize="16sp"
                 android:textColor="@color/dark_gray"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvMemberSince"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Member since ..."
+                android:textSize="14sp"
+                android:textColor="@color/gray"
                 android:layout_marginBottom="24dp" />
 
             <Button
@@ -85,18 +71,26 @@
                 android:layout_marginBottom="12dp" />
 
             <Button
-                android:id="@+id/btnMyServices"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="My Services"
-                android:layout_marginBottom="12dp" />
-
-            <Button
                 android:id="@+id/btnLogout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Logout"
                 android:backgroundTint="@color/red" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvMyPosts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvNoPosts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No services yet"
+                android:textSize="14sp"
+                android:textColor="@color/gray"
+                android:visibility="gone" />
 
         </LinearLayout>
     </ScrollView>

@@ -1,5 +1,7 @@
 package com.example.goprox;
 
+import android.text.Html;
+import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,6 +15,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.List;
 
@@ -20,13 +23,22 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
 
     private List<Service> serviceList;
     private OnItemClickListener listener;
+    private OnItemLongClickListener longClickListener;
 
     public interface OnItemClickListener {
         void onItemClick(int position);
     }
 
+    public interface OnItemLongClickListener {
+        void onItemLongClick(int position);
+    }
+
     public void setOnItemClickListener(OnItemClickListener listener) {
         this.listener = listener;
+    }
+
+    public void setOnItemLongClickListener(OnItemLongClickListener longClickListener) {
+        this.longClickListener = longClickListener;
     }
 
     public ServiceAdapter(List<Service> serviceList) {
@@ -59,7 +71,10 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             } catch (Exception ignored) {}
         }
         if (holder.tvDescription != null) {
-            holder.tvDescription.setText(service.getDescription() != null ? service.getDescription() : "");
+            String desc = service.getDescription() != null ? service.getDescription() : "";
+            holder.tvDescription.setLinksClickable(true);
+            holder.tvDescription.setMovementMethod(LinkMovementMethod.getInstance());
+            holder.tvDescription.setText(Html.fromHtml(desc, Html.FROM_HTML_MODE_LEGACY));
             try {
                 holder.tvDescription.setTextColor(
                         ContextCompat.getColor(holder.itemView.getContext(), R.color.blue));
@@ -72,7 +87,6 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             holder.ratingBar.setRating(service.getRating());
         }
 
-        // Avatar
         if (holder.ivProfile != null) {
             if (service.getImageUrl() != null && !service.getImageUrl().isEmpty()) {
                 try {
@@ -89,7 +103,6 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             }
         }
 
-        // Location
         String country = service.getCountry();
         String city = service.getCity();
         boolean hasCountry = country != null && !country.isEmpty();
@@ -114,6 +127,7 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             }
         }
 
+        // Click
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 int pos = holder.getAdapterPosition();
@@ -121,6 +135,18 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
                     listener.onItemClick(pos);
                 }
             }
+        });
+
+        // 🔥 LONG CLICK
+        holder.itemView.setOnLongClickListener(v -> {
+            if (longClickListener != null) {
+                int pos = holder.getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    longClickListener.onItemLongClick(pos);
+                    return true;
+                }
+            }
+            return false;
         });
     }
 

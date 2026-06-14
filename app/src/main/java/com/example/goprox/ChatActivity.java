@@ -9,11 +9,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.MimeTypeMap;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +27,7 @@ import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
@@ -49,6 +51,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import de.hdodenhof.circleimageview.CircleImageView;
+
 public class ChatActivity extends BaseActivity {
 
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
@@ -59,6 +63,7 @@ public class ChatActivity extends BaseActivity {
     private EditText etMessage;
     private ImageButton btnSend, btnAttach, btnBack, btnMic, btnVideoCall;
     private TextView tvUserName;
+    private CircleImageView ivProfilePhoto;
     private ChatAdapter adapter;
     private final List<ChatMessage> messageList = new ArrayList<>();
     private DatabaseReference chatRef;
@@ -66,15 +71,18 @@ public class ChatActivity extends BaseActivity {
     private AudioRecorder audioRecorder;
     private String currentAudioFile;
     private volatile boolean isRecordingAudio = false;
-    private AlertDialog recordingDialog;
-    private TextView tvRecordingTime;
     private Handler recordingHandler;
+
+    private LinearLayout llRecordingOverlay;
+    private TextView tvRecordingTime;
+    private View viewVisualizer;
+    private long recordingStartTime;
 
     private String chatId, otherUserId, currentUserId;
     private Uri fileUri;
 
     private final String FIREBASE_DB_URL =
-            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app/";
+            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,12 +111,16 @@ public class ChatActivity extends BaseActivity {
 
         recordingHandler = new Handler(Looper.getMainLooper());
 
+        // 🔥 FIX: Մաքրում ենք messageList-ը նոր chat-ի համար
+        messageList.clear();
+
         initViews();
         if (otherUserName != null && !otherUserName.isEmpty()) {
             tvUserName.setText(otherUserName);
         } else {
             loadReceiverName();
         }
+        loadProfilePhoto();
         setupFirebase();
         markMessagesAsRead();
     }
@@ -122,6 +134,10 @@ public class ChatActivity extends BaseActivity {
         btnMic = findViewById(R.id.btnMic);
         btnVideoCall = findViewById(R.id.btnVideoCall);
         tvUserName = findViewById(R.id.tvUserName);
+        ivProfilePhoto = findViewById(R.id.ivProfilePhoto);
+        llRecordingOverlay = findViewById(R.id.llRecordingOverlay);
+        tvRecordingTime = findViewById(R.id.tvRecordingTime);
+        viewVisualizer = findViewById(R.id.viewVisualizer);
 
         if (recyclerView == null || btnSend == null || etMessage == null) {
             Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
@@ -138,15 +154,48 @@ public class ChatActivity extends BaseActivity {
         btnSend.setOnClickListener(v -> sendTextMessage());
         btnBack.setOnClickListener(v -> finish());
         btnAttach.setOnClickListener(v -> showAttachmentDialog());
-        btnMic.setOnClickListener(v -> checkAndStartVoiceRecording());
+
+        btnMic.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    checkAndStartVoiceRecording();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    stopVoiceRecordingAndSend();
+                    return true;
+            }
+            return false;
+        });
+
         if (btnVideoCall != null) {
-            btnVideoCall.setOnClickListener(v -> {
-                // 🔥 Օգտագործում ենք CallHelper-ը, serviceTitle-ը դատարկ (chat-ից զանգի դեպքում)
-                CallHelper.startCall(ChatActivity.this, otherUserId,
-                        tvUserName != null ? tvUserName.getText().toString() : "User",
-                        null);
-            });
+            btnVideoCall.setOnClickListener(v -> CallHelper.startCall(ChatActivity.this, otherUserId,
+                    tvUserName != null ? tvUserName.getText().toString() : "User", null));
         }
+    }
+
+    // 🔥 LOAD OTHER USER'S PROFILE PHOTO
+    private void loadProfilePhoto() {
+        if (ivProfilePhoto == null || otherUserId == null) return;
+
+        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                .getReference("users").child(otherUserId).child("photoUrl")
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        String photoUrl = snapshot.getValue(String.class);
+                        if (photoUrl != null && !photoUrl.isEmpty()) {
+                            Glide.with(ChatActivity.this)
+                                    .load(photoUrl)
+                                    .placeholder(R.drawable.ic_profile_placeholder)
+                                    .error(R.drawable.ic_profile_placeholder)
+                                    .into(ivProfilePhoto);
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
+                });
     }
 
     // ================== VOICE RECORDING ==================
@@ -167,12 +216,10 @@ public class ChatActivity extends BaseActivity {
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
-            if (grantResults.length > 0
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startVoiceRecording();
             } else {
-                Toast.makeText(this,
-                        "Microphone permission is required", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -185,35 +232,33 @@ public class ChatActivity extends BaseActivity {
             Toast.makeText(this, "Cannot access storage", Toast.LENGTH_SHORT).show();
             return;
         }
-        currentAudioFile = cacheDir.getAbsolutePath()
-                + "/voice_" + System.currentTimeMillis() + ".m4a";
+        currentAudioFile = cacheDir.getAbsolutePath() + "/voice_" + System.currentTimeMillis() + ".m4a";
+        recordingStartTime = System.currentTimeMillis();
 
         try {
-            audioRecorder.startRecording(currentAudioFile, amplitude -> {});
+            audioRecorder.startRecording(currentAudioFile, amplitude -> updateVisualizer(amplitude));
             isRecordingAudio = true;
-            showRecordingDialog();
+            showRecordingOverlay();
         } catch (IOException e) {
             Toast.makeText(this, "Failed to start recording", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void showRecordingDialog() {
-        try {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            View view = getLayoutInflater().inflate(R.layout.dialog_recording, null);
-            if (view == null) return;
-
-            tvRecordingTime = view.findViewById(R.id.tvRecordingTime);
-            Button btnStop = view.findViewById(R.id.btnStopRecording);
-
-            recordingDialog = builder.setView(view).setCancelable(false).create();
-            recordingDialog.show();
-
-            btnStop.setOnClickListener(v -> stopVoiceRecording());
-            startRecordingTimer();
-        } catch (Exception e) {
-            Toast.makeText(this, "Recording dialog error", Toast.LENGTH_SHORT).show();
+    private void updateVisualizer(int amplitude) {
+        if (viewVisualizer != null) {
+            float scale = Math.min(amplitude / 32768f, 1.0f);
+            viewVisualizer.setScaleX(0.5f + scale * 1.5f);
+            viewVisualizer.setScaleY(0.5f + scale * 1.5f);
         }
+    }
+
+    private void showRecordingOverlay() {
+        if (llRecordingOverlay != null) llRecordingOverlay.setVisibility(View.VISIBLE);
+        startRecordingTimer();
+    }
+
+    private void hideRecordingOverlay() {
+        if (llRecordingOverlay != null) llRecordingOverlay.setVisibility(View.GONE);
     }
 
     private void startRecordingTimer() {
@@ -233,26 +278,60 @@ public class ChatActivity extends BaseActivity {
         }, 0);
     }
 
-    private void stopVoiceRecording() {
+    private void stopVoiceRecordingAndSend() {
         if (audioRecorder != null && isRecordingAudio) {
+            int duration = (int) ((System.currentTimeMillis() - recordingStartTime) / 1000);
             audioRecorder.stopRecording();
             isRecordingAudio = false;
-            if (recordingDialog != null && recordingDialog.isShowing()) {
-                try {
-                    recordingDialog.dismiss();
-                } catch (Exception ignored) {}
+            hideRecordingOverlay();
+
+            if (duration < 1) {
+                Toast.makeText(this, "Too short", Toast.LENGTH_SHORT).show();
+                return;
             }
+
             File audioFile = new File(currentAudioFile);
             if (audioFile.exists()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    fileUri = FileProvider.getUriForFile(this,
-                            getPackageName() + ".fileprovider", audioFile);
+                    fileUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", audioFile);
                 } else {
                     fileUri = Uri.fromFile(audioFile);
                 }
-                uploadFileAndSend("voice");
+                uploadVoiceMessageAndSend(duration);
             }
         }
+    }
+
+    private void uploadVoiceMessageAndSend(int duration) {
+        if (fileUri == null) return;
+        Toast.makeText(this, "Sending voice...", Toast.LENGTH_SHORT).show();
+
+        String fileName = System.currentTimeMillis() + "_" + (fileUri.getLastPathSegment() != null ? fileUri.getLastPathSegment() : "voice.m4a");
+        StorageReference storageRef = FirebaseStorage.getInstance().getReference("chat_attachments").child(chatId).child(fileName);
+
+        storageRef.putFile(fileUri)
+                .continueWithTask(task -> { if (!task.isSuccessful()) throw task.getException() != null ? task.getException() : new Exception("Upload failed"); return storageRef.getDownloadUrl(); })
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        String downloadUrl = task.getResult().toString();
+                        sendVoiceMessage(downloadUrl, duration);
+                    } else {
+                        Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void sendVoiceMessage(String fileUrl, int duration) {
+        if (chatRef == null || currentUserId == null) return;
+        String msgId = chatRef.push().getKey();
+        if (msgId == null) return;
+        long timestamp = System.currentTimeMillis();
+
+        ChatMessage msg = new ChatMessage(msgId, currentUserId, "Voice message", "voice", fileUrl, timestamp);
+        msg.setVoiceDuration(duration);
+
+        chatRef.child(msgId).setValue(msg)
+                .addOnSuccessListener(aVoid -> updateChatMeta("Voice message", timestamp, "voice"));
     }
 
     // ================== FIREBASE ==================
@@ -268,7 +347,6 @@ public class ChatActivity extends BaseActivity {
                                 tvUserName.setText(name);
                             }
                         }
-
                         @Override
                         public void onCancelled(@NonNull DatabaseError error) {}
                     });
@@ -276,6 +354,11 @@ public class ChatActivity extends BaseActivity {
     }
 
     private void setupFirebase() {
+        // 🔥 FIX: Նախորդ listener-ը հեռացնում ենք
+        if (msgListener != null && chatRef != null) {
+            chatRef.removeEventListener(msgListener);
+        }
+
         try {
             chatRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
                     .getReference("chats").child(chatId).child("messages");
@@ -293,20 +376,11 @@ public class ChatActivity extends BaseActivity {
                         }
                     }
                 }
-
-                @Override
-                public void onChildChanged(@NonNull DataSnapshot s, String p) {}
-
-                @Override
-                public void onChildRemoved(@NonNull DataSnapshot s) {}
-
-                @Override
-                public void onChildMoved(@NonNull DataSnapshot s, String p) {}
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-                    Toast.makeText(ChatActivity.this,
-                            "Failed to load messages", Toast.LENGTH_SHORT).show();
+                @Override public void onChildChanged(@NonNull DataSnapshot s, String p) {}
+                @Override public void onChildRemoved(@NonNull DataSnapshot s) {}
+                @Override public void onChildMoved(@NonNull DataSnapshot s, String p) {}
+                @Override public void onCancelled(@NonNull DatabaseError error) {
+                    Toast.makeText(ChatActivity.this, "Failed to load messages", Toast.LENGTH_SHORT).show();
                 }
             };
             query.addChildEventListener(msgListener);
@@ -324,14 +398,10 @@ public class ChatActivity extends BaseActivity {
 
     private void sendMessage(String type, String content, String fileUrl) {
         if (chatRef == null || currentUserId == null) return;
-
         String msgId = chatRef.push().getKey();
         if (msgId == null) return;
-
         long timestamp = System.currentTimeMillis();
-        ChatMessage msg = new ChatMessage(msgId, currentUserId,
-                content, type, fileUrl, timestamp);
-
+        ChatMessage msg = new ChatMessage(msgId, currentUserId, content, type, fileUrl, timestamp);
         chatRef.child(msgId).setValue(msg)
                 .addOnSuccessListener(aVoid -> {
                     if (etMessage != null) etMessage.setText("");
@@ -344,7 +414,6 @@ public class ChatActivity extends BaseActivity {
             DatabaseReference userChatsRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
                     .getReference("user_chats");
             Map<String, Object> updates = new HashMap<>();
-
             updates.put(currentUserId + "/" + otherUserId + "/lastMessage", lastMsg);
             updates.put(currentUserId + "/" + otherUserId + "/timestamp", timestamp);
             updates.put(currentUserId + "/" + otherUserId + "/chatId", chatId);
@@ -357,11 +426,11 @@ public class ChatActivity extends BaseActivity {
             otherUpdates.put("lastMessageType", type);
             otherUpdates.put("unreadCount", ServerValue.increment(1));
             updates.put(otherUserId + "/" + currentUserId, otherUpdates);
-
             userChatsRef.updateChildren(updates);
         } catch (Exception ignored) {}
     }
 
+    // 🔥 MARK MESSAGES AS READ — update Firebase + local
     private void markMessagesAsRead() {
         try {
             FirebaseDatabase.getInstance(FIREBASE_DB_URL)
@@ -370,6 +439,18 @@ public class ChatActivity extends BaseActivity {
                     .child(otherUserId)
                     .child("unreadCount")
                     .setValue(0);
+
+            for (ChatMessage msg : messageList) {
+                if (msg.getSenderId() != null && !msg.getSenderId().equals(currentUserId) && !msg.isRead()) {
+                    msg.setRead(true);
+                    if (chatRef != null) {
+                        chatRef.child(msg.getId()).child("isRead").setValue(true);
+                    }
+                }
+            }
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
         } catch (Exception ignored) {}
     }
 
@@ -396,8 +477,7 @@ public class ChatActivity extends BaseActivity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode,
-                                    @Nullable Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null && data.getData() != null) {
             fileUri = data.getData();
@@ -409,22 +489,12 @@ public class ChatActivity extends BaseActivity {
         if (fileUri == null) return;
         Toast.makeText(this, "Uploading...", Toast.LENGTH_SHORT).show();
 
-        String fileName = System.currentTimeMillis() + "_"
-                + (fileUri.getLastPathSegment() != null
-                ? fileUri.getLastPathSegment() : "file");
-
-        StorageReference storageRef = FirebaseStorage.getInstance()
-                .getReference("chat_attachments")
-                .child(chatId)
-                .child(fileName);
+        String fileName = System.currentTimeMillis() + "_" + (fileUri.getLastPathSegment() != null ? fileUri.getLastPathSegment() : "file");
+        StorageReference storageRef = FirebaseStorage.getInstance().getReference("chat_attachments").child(chatId).child(fileName);
 
         storageRef.putFile(fileUri)
                 .continueWithTask(task -> {
-                    if (!task.isSuccessful()) {
-                        throw task.getException() != null
-                                ? task.getException()
-                                : new Exception("Upload failed");
-                    }
+                    if (!task.isSuccessful()) throw task.getException() != null ? task.getException() : new Exception("Upload failed");
                     return storageRef.getDownloadUrl();
                 })
                 .addOnCompleteListener(task -> {
@@ -433,16 +503,13 @@ public class ChatActivity extends BaseActivity {
                         String displayName = fileUri.getLastPathSegment();
                         String finalType = messageType;
                         if ("file".equals(messageType)) {
-                            finalType = (fileUri.toString().contains("image"))
-                                    ? "image" : "file";
+                            finalType = (fileUri.toString().contains("image")) ? "image" : "file";
                         }
                         sendMessage(finalType, displayName, downloadUrl);
                         Toast.makeText(this, "Upload successful", Toast.LENGTH_SHORT).show();
                     } else {
                         Exception e = task.getException();
-                        Toast.makeText(this,
-                                "Upload failed: " + (e != null ? e.getMessage() : "Unknown error"),
-                                Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Upload failed: " + (e != null ? e.getMessage() : "Unknown error"), Toast.LENGTH_LONG).show();
                     }
                 });
     }
@@ -452,119 +519,59 @@ public class ChatActivity extends BaseActivity {
             Toast.makeText(this, "Invalid file URL", Toast.LENGTH_SHORT).show();
             return;
         }
-
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(Uri.parse(fileUrl), getMimeTypeFromUrl(fileUrl));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
         if (intent.resolveActivity(getPackageManager()) != null) {
-            try {
-                startActivity(Intent.createChooser(intent, "Open with"));
-                return;
-            } catch (ActivityNotFoundException ignored) {}
+            try { startActivity(Intent.createChooser(intent, "Open with")); return; } catch (ActivityNotFoundException ignored) {}
         }
-
         Toast.makeText(this, "Downloading file...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 URL url = new URL(fileUrl);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setConnectTimeout(10000);
-                connection.setReadTimeout(10000);
-                connection.connect();
-
+                connection.setConnectTimeout(10000); connection.setReadTimeout(10000); connection.connect();
                 String fName = Uri.parse(fileUrl).getLastPathSegment();
-                if (fName == null || !fName.contains("."))
-                    fName = "file_" + System.currentTimeMillis();
-
+                if (fName == null || !fName.contains(".")) fName = "file_" + System.currentTimeMillis();
                 File tempFile = new File(getCacheDir(), fName);
-                try (InputStream input = connection.getInputStream();
-                     FileOutputStream out = new FileOutputStream(tempFile)) {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = input.read(buffer)) != -1)
-                        out.write(buffer, 0, bytesRead);
+                try (InputStream input = connection.getInputStream(); FileOutputStream out = new FileOutputStream(tempFile)) {
+                    byte[] buffer = new byte[4096]; int bytesRead;
+                    while ((bytesRead = input.read(buffer)) != -1) out.write(buffer, 0, bytesRead);
                 }
                 connection.disconnect();
                 runOnUiThread(() -> openLocalFile(tempFile));
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this,
-                        "Download failed: " + e.getMessage(),
-                        Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         }).start();
     }
 
     private String getMimeTypeFromUrl(String url) {
-        try {
-            String ext = MimeTypeMap.getFileExtensionFromUrl(url);
-            if (ext != null)
-                return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
-        } catch (Exception ignored) {}
+        try { String ext = MimeTypeMap.getFileExtensionFromUrl(url); if (ext != null) return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase()); } catch (Exception ignored) {}
         return "*/*";
     }
 
     private void openLocalFile(File file) {
-        if (file == null || !file.exists()) {
-            Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (file == null || !file.exists()) { Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show(); return; }
         try {
-            Uri uri;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                uri = FileProvider.getUriForFile(this,
-                        getPackageName() + ".fileprovider", file);
-            } else {
-                uri = Uri.fromFile(file);
-            }
-            String mimeType = getMimeType(file);
-            if (mimeType == null) mimeType = "*/*";
-
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(uri, mimeType);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Uri uri = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ? FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file) : Uri.fromFile(file);
+            String mimeType = getMimeType(file); if (mimeType == null) mimeType = "*/*";
+            Intent intent = new Intent(Intent.ACTION_VIEW); intent.setDataAndType(uri, mimeType); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(intent, "Open with"));
-        } catch (ActivityNotFoundException e) {
-            Toast.makeText(this, "No app found to open this file", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Error opening file", Toast.LENGTH_SHORT).show();
-        }
+        } catch (ActivityNotFoundException e) { Toast.makeText(this, "No app found to open this file", Toast.LENGTH_SHORT).show(); } catch (Exception e) { Toast.makeText(this, "Error opening file", Toast.LENGTH_SHORT).show(); }
     }
 
     private String getMimeType(File file) {
-        try {
-            String ext = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath());
-            if (ext != null)
-                return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
-        } catch (Exception ignored) {}
+        try { String ext = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath()); if (ext != null) return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase()); } catch (Exception ignored) {}
         return null;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (msgListener != null && chatRef != null) {
-            try {
-                chatRef.removeEventListener(msgListener);
-            } catch (Exception ignored) {}
-        }
-        if (adapter != null) {
-            try {
-                adapter.stopPlaying();
-            } catch (Exception ignored) {}
-        }
-        if (audioRecorder != null && isRecordingAudio) {
-            try {
-                audioRecorder.stopRecording();
-            } catch (Exception ignored) {}
-        }
-        if (recordingDialog != null && recordingDialog.isShowing()) {
-            try {
-                recordingDialog.dismiss();
-            } catch (Exception ignored) {}
-        }
-        if (recordingHandler != null) {
-            recordingHandler.removeCallbacksAndMessages(null);
-        }
+        if (msgListener != null && chatRef != null) { try { chatRef.removeEventListener(msgListener); } catch (Exception ignored) {} }
+        if (adapter != null) { try { adapter.stopPlaying(); } catch (Exception ignored) {} }
+        if (audioRecorder != null && isRecordingAudio) { try { audioRecorder.stopRecording(); } catch (Exception ignored) {} }
+        if (recordingHandler != null) { recordingHandler.removeCallbacksAndMessages(null); }
     }
 }

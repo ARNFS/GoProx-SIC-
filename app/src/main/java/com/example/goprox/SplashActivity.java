@@ -30,22 +30,22 @@ public class SplashActivity extends AppCompatActivity {
             FirebaseUser currentUser = mAuth.getCurrentUser();
             Intent intent;
 
-            if (currentUser != null) {
-                if (currentUser.isEmailVerified()) {
-                    intent = new Intent(this, HomeActivity.class);
-                } else {
-                    intent = new Intent(this, VerifyEmailActivity.class);
-                }
+            if (currentUser != null && currentUser.isEmailVerified()) {
+                // User is logged in → HomeActivity
+                intent = new Intent(this, HomeActivity.class);
+            } else if (currentUser != null && !currentUser.isEmailVerified()) {
+                // Email not verified → VerifyEmailActivity
+                intent = new Intent(this, VerifyEmailActivity.class);
             } else {
-                intent = new Intent(this, LoginActivity.class);
+                // User is NOT logged in → MainActivity
+                intent = new Intent(this, MainActivity.class);
             }
 
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             finish();
         } catch (Exception e) {
-            // Fallback to login on error
-            Intent intent = new Intent(this, LoginActivity.class);
+            Intent intent = new Intent(this, MainActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             finish();

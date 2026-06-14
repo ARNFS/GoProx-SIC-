@@ -32,7 +32,7 @@ public class ChatListActivity extends BaseActivity {
     private ValueEventListener chatListListener;
     private DatabaseReference chatRef;
 
-    private final String FIREBASE_DB_URL = "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app/";
+    private final String FIREBASE_DB_URL = "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

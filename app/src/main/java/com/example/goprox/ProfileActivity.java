@@ -1,23 +1,23 @@
 package com.example.goprox;
 
-import android.content.DialogInterface;
+import android.app.AlertDialog;
 import android.content.Intent;
-import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.View;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -31,7 +31,7 @@ public class ProfileActivity extends BaseActivity {
 
     private CircleImageView ivProfileAvatar;
     private TextView tvName, tvEmail, tvMemberSince, tvNoPosts;
-    private Button btnEditProfile, btnLogout, btnMyServices;
+    private Button btnEditProfile, btnLogout;
     private RecyclerView rvMyPosts;
     private BottomNavigationView bottomNavigationView;
 
@@ -73,7 +73,6 @@ public class ProfileActivity extends BaseActivity {
         tvMemberSince = findViewById(R.id.tvMemberSince);
         tvNoPosts = findViewById(R.id.tvNoPosts);
         btnEditProfile = findViewById(R.id.btnEditProfile);
-        btnMyServices = findViewById(R.id.btnMyServices);
         btnLogout = findViewById(R.id.btnLogout);
         rvMyPosts = findViewById(R.id.rvMyPosts);
         bottomNavigationView = findViewById(R.id.bottomNavigation);
@@ -119,8 +118,12 @@ public class ProfileActivity extends BaseActivity {
             }
         }
 
-        if (ivProfileAvatar != null) {
-            ivProfileAvatar.setImageResource(R.drawable.ic_profile_placeholder);
+        if (ivProfileAvatar != null && currentUser.getPhotoUrl() != null) {
+            Glide.with(this)
+                    .load(currentUser.getPhotoUrl())
+                    .placeholder(R.drawable.ic_profile_placeholder)
+                    .error(R.drawable.ic_profile_placeholder)
+                    .into(ivProfileAvatar);
         }
     }
 
@@ -162,35 +165,76 @@ public class ProfileActivity extends BaseActivity {
         postsAdapter = new ProfilePostsAdapter(myPostsList);
         rvMyPosts.setAdapter(postsAdapter);
 
+        // Click
         postsAdapter.setOnItemClickListener(position -> {
             if (position >= 0 && position < myPostsList.size()) {
                 Service service = myPostsList.get(position);
                 if (service != null) {
-                    Toast.makeText(this, "Edit post: " + service.getName(), Toast.LENGTH_SHORT).show();
+                    // 🔥 Edit via AddPostActivity
+                    openEditService(service);
                 }
             }
         });
+
+        // Long Click — Delete
+        postsAdapter.setOnItemLongClickListener(position -> {
+            if (position >= 0 && position < myPostsList.size()) {
+                Service service = myPostsList.get(position);
+                if (service != null) {
+                    showDeleteConfirmation(service, position);
+                }
+            }
+        });
+    }
+
+    // 🔥 OPEN EDIT
+    private void openEditService(Service service) {
+        Intent intent = new Intent(this, AddPostActivity.class);
+        intent.putExtra("serviceId", service.getId());
+        intent.putExtra("name", service.getName());
+        intent.putExtra("profession", service.getProfession());
+        intent.putExtra("description", service.getDescription());
+        intent.putExtra("price", service.getPrice());
+        intent.putExtra("country", service.getCountry());
+        intent.putExtra("city", service.getCity());
+        intent.putExtra("imageUrl", service.getImageUrl());
+        startActivity(intent);
+    }
+
+    // 🔥 DELETE CONFIRMATION
+    // 🔥 DELETE CONFIRMATION — ԴԵՂԻՆ WARNING ICON-ՈՎ
+    private void showDeleteConfirmation(Service service, int position) {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Delete Service")
+                .setMessage("Are you sure you want to delete \"" + service.getName() + "\"?")
+                .setIcon(R.drawable.ic_warning)
+                .setPositiveButton("Delete", (d, which) -> {
+                    FirebaseFirestore.getInstance().collection("services").document(service.getId()).delete()
+                            .addOnSuccessListener(aVoid -> {
+                                myPostsList.remove(position);
+                                postsAdapter.notifyItemRemoved(position);
+                                updatePostsView();
+                                Toast.makeText(this, "Deleted!", Toast.LENGTH_SHORT).show();
+                            })
+                            .addOnFailureListener(e -> Toast.makeText(this, "Delete failed", Toast.LENGTH_SHORT).show());
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+        dialog.show();
+        try {
+            int yellowColor = ContextCompat.getColor(this, android.R.color.holo_orange_dark);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(yellowColor);
+        } catch (Exception ignored) {}
     }
 
     private void setupBottomNavigation() {
         if (bottomNavigationView == null) return;
         bottomNavigationView.setOnNavigationItemSelectedListener(item -> {
             int id = item.getItemId();
-            if (id == R.id.nav_home) {
-                startActivity(new Intent(this, HomeActivity.class));
-                finish();
-                return true;
-            } else if (id == R.id.nav_chats) {
-                startActivity(new Intent(this, ChatListActivity.class));
-                finish();
-                return true;
-            } else if (id == R.id.nav_add) {
-                startActivity(new Intent(this, AddPostActivity.class));
-                finish();
-                return true;
-            } else if (id == R.id.nav_profile) {
-                return true;
-            }
+            if (id == R.id.nav_home) { startActivity(new Intent(this, HomeActivity.class)); finish(); return true; }
+            else if (id == R.id.nav_chats) { startActivity(new Intent(this, ChatListActivity.class)); finish(); return true; }
+            else if (id == R.id.nav_add) { startActivity(new Intent(this, AddPostActivity.class)); finish(); return true; }
+            else if (id == R.id.nav_profile) { return true; }
             return false;
         });
         bottomNavigationView.setSelectedItemId(R.id.nav_profile);
@@ -198,44 +242,25 @@ public class ProfileActivity extends BaseActivity {
 
     private void setupButtons() {
         if (btnEditProfile != null) {
-            btnEditProfile.setOnClickListener(v ->
-                    Toast.makeText(this, "Edit profile", Toast.LENGTH_SHORT).show());
-        }
-        if (btnMyServices != null) {
-            btnMyServices.setOnClickListener(v ->
-                    Toast.makeText(this, "My services", Toast.LENGTH_SHORT).show());
+            btnEditProfile.setOnClickListener(v -> startActivity(new Intent(this, EditProfileActivity.class)));
         }
         if (btnLogout != null) {
             btnLogout.setOnClickListener(v -> showLogoutDialog());
         }
     }
 
-    // 🔥 "ARE YOU SURE?" DIALOG — ԴԵՂԻՆ WARNING ICON-ՈՎ
     private void showLogoutDialog() {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Logout")
                 .setMessage("Are you sure you want to logout?")
-                .setPositiveButton("Yes", (d, which) -> {
-                    mAuth.signOut();
-                    startActivity(new Intent(this, LoginActivity.class));
-                    finish();
-                })
+                .setPositiveButton("Yes", (d, which) -> { mAuth.signOut(); startActivity(new Intent(this, LoginActivity.class)); finish(); })
                 .setNegativeButton("No", (d, which) -> d.dismiss())
                 .setIcon(R.drawable.ic_warning)
                 .create();
-
         dialog.show();
-
-        // Դեղին գույնը icon-ի համար
-        try {
-            int yellowColor = ContextCompat.getColor(this, android.R.color.holo_orange_dark);
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(yellowColor);
-        } catch (Exception ignored) {}
+        try { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark)); } catch (Exception ignored) {}
     }
 
     @Override
-    public boolean onSupportNavigateUp() {
-        onBackPressed();
-        return true;
-    }
+    public boolean onSupportNavigateUp() { onBackPressed(); return true; }
 }

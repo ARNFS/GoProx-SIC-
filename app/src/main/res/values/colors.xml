@@ -1,23 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Основные -->
-    <color name="primary">#4CAF50</color>
-    <color name="primary_dark">#388E3C</color>
-    <color name="accent">#2196F3</color>
-    <color name="green">#4CAF50</color>
-    <color name="red">#F44336</color>
-    <color name="yellow">#ffff4a</color>
-    <color name="blue">#0000FF</color>
+    <!-- Primary — deep blue (trust, professional) -->
+    <color name="primary">#1565C0</color>
+    <color name="primary_dark">#0D47A1</color>
+    <color name="primary_light">#42A5F5</color>
 
-    <!-- Градации серого -->
+    <!-- Accent — warm orange (call to action) -->
+    <color name="accent">#FF6D00</color>
+    <color name="accent_light">#FF9E40</color>
+
+    <!-- Status colors -->
+    <color name="green">#2E7D32</color>
+    <color name="red">#C62828</color>
+    <color name="yellow">#F9A825</color>
+    <color name="blue">#1565C0</color>
+
+    <!-- Neutrals -->
     <color name="white">#FFFFFF</color>
-    <color name="black">#000000</color>
-    <color name="gray">#888888</color>
-    <color name="dark_gray">#666666</color>
+    <color name="black">#212121</color>
+    <color name="gray">#9E9E9E</color>
+    <color name="dark_gray">#616161</color>
     <color name="light_gray">#E0E0E0</color>
+    <color name="background">#F5F5F5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="on_surface">#212121</color>
 
-    <!-- Чат -->
-    <color name="message_me">#DCF8C6</color>
+    <!-- Chat -->
+    <color name="message_me">#E3F2FD</color>
     <color name="message_other">#FFFFFF</color>
     <color name="chat_background">#ECE5DD</color>
 </resources>

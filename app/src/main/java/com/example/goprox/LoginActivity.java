@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.annotation.NonNull;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -24,6 +25,13 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -35,6 +43,8 @@ public class LoginActivity extends AppCompatActivity {
     private FirebaseAuth mAuth;
     private GoogleSignInClient googleSignInClient;
     private ActivityResultLauncher<Intent> googleLauncher;
+
+    private static final String FIREBASE_DB_URL = "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,38 +79,27 @@ public class LoginActivity extends AppCompatActivity {
             Toast.makeText(this, "Google Sign-In init failed", Toast.LENGTH_SHORT).show();
         }
 
-        // Modern Google sign-in
         googleLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (pbLoading == null) return;
                     Intent data = result.getData();
-                    if (data == null) {
-                        pbLoading.setVisibility(View.GONE);
-                        return;
-                    }
+                    if (data == null) { pbLoading.setVisibility(View.GONE); return; }
 
                     try {
-                        Task<GoogleSignInAccount> task =
-                                GoogleSignIn.getSignedInAccountFromIntent(data);
+                        Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
                         GoogleSignInAccount account = task.getResult(ApiException.class);
+                        if (account == null || account.getIdToken() == null) { pbLoading.setVisibility(View.GONE); return; }
 
-                        if (account == null || account.getIdToken() == null) {
-                            pbLoading.setVisibility(View.GONE);
-                            return;
-                        }
-
-                        AuthCredential credential =
-                                GoogleAuthProvider.getCredential(account.getIdToken(), null);
-
+                        AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
                         mAuth.signInWithCredential(credential)
                                 .addOnCompleteListener(t -> {
                                     pbLoading.setVisibility(View.GONE);
                                     if (t.isSuccessful()) {
+                                        saveUserNameIfMissing();
                                         goToHome();
                                     } else {
-                                        Toast.makeText(this,
-                                                "Login failed", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(this, "Login failed", Toast.LENGTH_SHORT).show();
                                     }
                                 });
                     } catch (ApiException e) {
@@ -142,10 +141,10 @@ public class LoginActivity extends AppCompatActivity {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null && user.isEmailVerified()) {
+                            saveUserNameIfMissing();
                             goToHome();
                         } else {
-                            Toast.makeText(this,
-                                    "Verify email first", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, "Verify email first", Toast.LENGTH_LONG).show();
                             startActivity(new Intent(this, VerifyEmailActivity.class));
                             finish();
                         }
@@ -162,70 +161,68 @@ public class LoginActivity extends AppCompatActivity {
                 });
     }
 
-    private void forgotPassword() {
-        String email = etEmail.getText().toString().trim();
+    // 🔥 LOGIN-ԻՑ ՀԵՏՈ NAME-Ը SAVE ԱՆԵԼ, ԵԹԵ ՉԿԱ
+    private void saveUserNameIfMissing() {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) return;
 
-        if (email.isEmpty()) {
-            Toast.makeText(this, "Enter email first", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        String uid = user.getUid();
 
-        pbLoading.setVisibility(View.VISIBLE);
-
-        mAuth.sendPasswordResetEmail(email)
-                .addOnCompleteListener(task -> {
-                    if (pbLoading != null) pbLoading.setVisibility(View.GONE);
-
-                    if (task.isSuccessful()) {
-                        Toast.makeText(this,
-                                "Reset email sent", Toast.LENGTH_SHORT).show();
-                    } else {
-                        String error = "Failed request";
-                        if (task.getException() != null) {
-                            String msg = task.getException().getMessage();
-                            if (msg != null && msg.contains("no user record")) {
-                                error = "No account found with this email";
+        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                .getReference("users").child(uid).child("name")
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (!snapshot.exists()) {
+                            // Name չկա — ավելացնենք
+                            String name = user.getDisplayName();
+                            if (name == null || name.isEmpty()) {
+                                String email = user.getEmail();
+                                name = (email != null && email.contains("@")) ? email.split("@")[0] : "User";
                             }
+
+                            Map<String, Object> userData = new HashMap<>();
+                            userData.put("name", name);
+                            userData.put("email", user.getEmail());
+                            userData.put("uid", uid);
+
+                            FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                                    .getReference("users").child(uid)
+                                    .setValue(userData);
                         }
-                        Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
                     }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
                 });
     }
 
-    private void startGoogleSignIn() {
-        if (googleSignInClient == null) {
-            Toast.makeText(this, "Google Sign-In unavailable", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
-        try {
-            Intent intent = googleSignInClient.getSignInIntent();
-            googleLauncher.launch(intent);
-        } catch (Exception e) {
+    private void forgotPassword() {
+        String email = etEmail.getText().toString().trim();
+        if (email.isEmpty()) { Toast.makeText(this, "Enter email first", Toast.LENGTH_SHORT).show(); return; }
+        pbLoading.setVisibility(View.VISIBLE);
+        mAuth.sendPasswordResetEmail(email).addOnCompleteListener(task -> {
             if (pbLoading != null) pbLoading.setVisibility(View.GONE);
-            Toast.makeText(this, "Google Sign-In error", Toast.LENGTH_SHORT).show();
-        }
+            if (task.isSuccessful()) Toast.makeText(this, "Reset email sent", Toast.LENGTH_SHORT).show();
+            else {
+                String error = "Failed request";
+                if (task.getException() != null) { String msg = task.getException().getMessage(); if (msg != null && msg.contains("no user record")) error = "No account found with this email"; }
+                Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void startGoogleSignIn() {
+        if (googleSignInClient == null) { Toast.makeText(this, "Google Sign-In unavailable", Toast.LENGTH_SHORT).show(); return; }
+        if (pbLoading != null) pbLoading.setVisibility(View.VISIBLE);
+        try { Intent intent = googleSignInClient.getSignInIntent(); googleLauncher.launch(intent); } catch (Exception e) { if (pbLoading != null) pbLoading.setVisibility(View.GONE); Toast.makeText(this, "Google Sign-In error", Toast.LENGTH_SHORT).show(); }
     }
 
     private void goToHome() {
-        try {
-            Intent intent = new Intent(this, HomeActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-            finish();
-        } catch (Exception e) {
-            Toast.makeText(this, "Navigation error", Toast.LENGTH_SHORT).show();
-        }
+        try { Intent intent = new Intent(this, HomeActivity.class); intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK); startActivity(intent); finish(); } catch (Exception e) { Toast.makeText(this, "Navigation error", Toast.LENGTH_SHORT).show(); }
     }
 
     private void hideKeyboard() {
-        try {
-            View v = getCurrentFocus();
-            if (v != null) {
-                InputMethodManager imm =
-                        (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-            }
-        } catch (Exception ignored) {}
+        try { View v = getCurrentFocus(); if (v != null) { InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE); if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0); } } catch (Exception ignored) {}
     }
 }

@@ -1,6 +1,8 @@
 package com.example.goprox;
 
 import android.content.Context;
+import android.text.Html;
+import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,15 +58,17 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
         if (holder.tvProfession != null) {
             holder.tvProfession.setText(service.getProfession() != null ? service.getProfession() : "");
             try {
-                holder.tvProfession.setTextColor(
-                        ContextCompat.getColor(context, R.color.red));
+                holder.tvProfession.setTextColor(ContextCompat.getColor(context, R.color.red));
             } catch (Exception ignored) {}
         }
+        // 🔥 DESCRIPTION — CLICKABLE LINKS
         if (holder.tvDescription != null) {
-            holder.tvDescription.setText(service.getDescription() != null ? service.getDescription() : "");
+            String desc = service.getDescription() != null ? service.getDescription() : "";
+            holder.tvDescription.setLinksClickable(true);
+            holder.tvDescription.setMovementMethod(LinkMovementMethod.getInstance());
+            holder.tvDescription.setText(Html.fromHtml(desc, Html.FROM_HTML_MODE_LEGACY));
             try {
-                holder.tvDescription.setTextColor(
-                        ContextCompat.getColor(context, R.color.blue));
+                holder.tvDescription.setTextColor(ContextCompat.getColor(context, R.color.blue));
             } catch (Exception ignored) {}
         }
         if (holder.tvPrice != null) {
@@ -74,7 +78,6 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
             holder.ratingBar.setRating(service.getRating());
         }
 
-        // Avatar
         if (holder.ivProfile != null) {
             if (service.getImageUrl() != null && !service.getImageUrl().isEmpty() && context != null) {
                 try {
@@ -91,7 +94,6 @@ public class SpecialistAdapter extends RecyclerView.Adapter<SpecialistAdapter.Vi
             }
         }
 
-        // Location
         if (holder.tvLocation != null && holder.ivLocation != null) {
             String country = service.getCountry();
             String city = service.getCity();

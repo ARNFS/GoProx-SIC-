@@ -16,7 +16,9 @@
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
         android:padding="16dp">
 
         <LinearLayout
@@ -160,7 +162,7 @@
                 android:id="@+id/etReview"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Your comment"
+                android:hint="Your comment (optional)"
                 android:inputType="textMultiLine"
                 android:minLines="2"
                 android:maxLines="4"
@@ -188,8 +190,8 @@
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerViewReviews"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" />
+                android:layout_height="300dp"
+                android:nestedScrollingEnabled="true" />
 
         </LinearLayout>
     </ScrollView>
