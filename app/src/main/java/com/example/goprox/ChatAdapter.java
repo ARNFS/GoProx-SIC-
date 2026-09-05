@@ -145,7 +145,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
             // File icon — միշտ file.pdf (upload-ից հետո)
             if (holder.ivFileIcon != null) {
-                holder.ivFileIcon.setImageResource(R.drawable.file_pdf);
+                holder.ivFileIcon.setImageResource(R.drawable.file);
             }
 
             // Upload progress

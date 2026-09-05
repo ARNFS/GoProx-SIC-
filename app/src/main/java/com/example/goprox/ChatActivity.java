@@ -99,12 +99,15 @@ public class ChatActivity extends BaseActivity {
         }
 
         FirebaseAuth auth = FirebaseAuth.getInstance();
+
         if (auth.getCurrentUser() == null) {
             Toast.makeText(this, "Please sign in", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
+
         currentUserId = auth.getCurrentUser().getUid();
+
         chatId = (currentUserId.compareTo(otherUserId) < 0)
                 ? currentUserId + "_" + otherUserId
                 : otherUserId + "_" + currentUserId;
@@ -114,18 +117,59 @@ public class ChatActivity extends BaseActivity {
         // 🔥 FIX: Մաքրում ենք messageList-ը նոր chat-ի համար
         messageList.clear();
 
+        // 🔐 Յուրաքանչյուր user գրանցում է միայն ԻՐ UID-ն participants-ում
+        ensureCurrentUserParticipant();
+
         initViews();
+
         if (otherUserName != null && !otherUserName.isEmpty()) {
             tvUserName.setText(otherUserName);
         } else {
             loadReceiverName();
         }
+
         loadProfilePhoto();
         setupFirebase();
         markMessagesAsRead();
     }
 
+    // ================== CHAT PARTICIPANT ==================
+
+    /**
+     * Ստեղծում է միայն current user's participant entry-ն։
+     *
+     * Structure:
+     *
+     * chats/
+     *   {chatId}/
+     *     participants/
+     *       {currentUserId}: true
+     */
+    private void ensureCurrentUserParticipant() {
+        if (chatId == null || currentUserId == null) {
+            return;
+        }
+
+        try {
+            DatabaseReference participantRef =
+                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                            .getReference("chats")
+                            .child(chatId)
+                            .child("participants")
+                            .child(currentUserId);
+
+            participantRef.setValue(true)
+                    .addOnFailureListener(e -> {
+                        // Chat-ը չենք կանգնեցնում participant write-ի failure-ի պատճառով։
+                        // Security rules-ի հաջորդ փուլում դա կդառնա backend requirement։
+                    });
+
+        } catch (Exception ignored) {
+        }
+    }
+
     private void initViews() {
+
         recyclerView = findViewById(R.id.recyclerViewChat);
         etMessage = findViewById(R.id.etMessage);
         btnSend = findViewById(R.id.btnSend);
@@ -146,432 +190,1330 @@ public class ChatActivity extends BaseActivity {
         }
 
         adapter = new ChatAdapter(messageList, currentUserId);
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+
+        LinearLayoutManager layoutManager =
+                new LinearLayoutManager(this);
+
         layoutManager.setStackFromEnd(true);
+
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.setAdapter(adapter);
 
         btnSend.setOnClickListener(v -> sendTextMessage());
+
         btnBack.setOnClickListener(v -> finish());
-        btnAttach.setOnClickListener(v -> showAttachmentDialog());
+
+        btnAttach.setOnClickListener(
+                v -> showAttachmentDialog()
+        );
 
         btnMic.setOnTouchListener((v, event) -> {
+
             switch (event.getAction()) {
+
                 case MotionEvent.ACTION_DOWN:
                     checkAndStartVoiceRecording();
                     return true;
+
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     stopVoiceRecordingAndSend();
                     return true;
             }
+
             return false;
         });
 
         if (btnVideoCall != null) {
-            btnVideoCall.setOnClickListener(v -> CallHelper.startCall(ChatActivity.this, otherUserId,
-                    tvUserName != null ? tvUserName.getText().toString() : "User", null));
+            btnVideoCall.setOnClickListener(
+                    v -> CallHelper.startCall(
+                            ChatActivity.this,
+                            otherUserId,
+                            tvUserName != null
+                                    ? tvUserName.getText().toString()
+                                    : "User",
+                            null
+                    )
+            );
         }
     }
 
-    // 🔥 LOAD OTHER USER'S PROFILE PHOTO
+    // ================== PROFILE PHOTO ==================
+
     private void loadProfilePhoto() {
-        if (ivProfilePhoto == null || otherUserId == null) return;
+
+        if (ivProfilePhoto == null || otherUserId == null) {
+            return;
+        }
 
         FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("users").child(otherUserId).child("photoUrl")
-                .addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot snapshot) {
-                        String photoUrl = snapshot.getValue(String.class);
-                        if (photoUrl != null && !photoUrl.isEmpty()) {
-                            Glide.with(ChatActivity.this)
-                                    .load(photoUrl)
-                                    .placeholder(R.drawable.ic_profile_placeholder)
-                                    .error(R.drawable.ic_profile_placeholder)
-                                    .into(ivProfilePhoto);
-                        }
-                    }
+                .getReference("users")
+                .child(otherUserId)
+                .child("photoUrl")
+                .addListenerForSingleValueEvent(
+                        new ValueEventListener() {
 
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError error) {}
-                });
+                            @Override
+                            public void onDataChange(
+                                    @NonNull DataSnapshot snapshot
+                            ) {
+
+                                String photoUrl =
+                                        snapshot.getValue(String.class);
+
+                                if (photoUrl != null
+                                        && !photoUrl.isEmpty()) {
+
+                                    Glide.with(ChatActivity.this)
+                                            .load(photoUrl)
+                                            .placeholder(
+                                                    R.drawable.ic_profile_placeholder
+                                            )
+                                            .error(
+                                                    R.drawable.ic_profile_placeholder
+                                            )
+                                            .into(ivProfilePhoto);
+                                }
+                            }
+
+                            @Override
+                            public void onCancelled(
+                                    @NonNull DatabaseError error
+                            ) {
+                            }
+                        }
+                );
     }
 
     // ================== VOICE RECORDING ==================
+
     private void checkAndStartVoiceRecording() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO},
-                    REQUEST_RECORD_AUDIO_PERMISSION);
+
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(
+                    this,
+                    new String[]{
+                            Manifest.permission.RECORD_AUDIO
+                    },
+                    REQUEST_RECORD_AUDIO_PERMISSION
+            );
+
         } else {
             startVoiceRecording();
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    public void onRequestPermissionsResult(
+            int requestCode,
+            @NonNull String[] permissions,
+            @NonNull int[] grantResults
+    ) {
+
+        super.onRequestPermissionsResult(
+                requestCode,
+                permissions,
+                grantResults
+        );
+
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+            if (grantResults.length > 0
+                    && grantResults[0]
+                    == PackageManager.PERMISSION_GRANTED) {
+
                 startVoiceRecording();
+
             } else {
-                Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show();
+
+                Toast.makeText(
+                        this,
+                        "Microphone permission is required",
+                        Toast.LENGTH_SHORT
+                ).show();
             }
         }
     }
 
     private void startVoiceRecording() {
-        if (audioRecorder == null) audioRecorder = new AudioRecorder();
+
+        if (audioRecorder == null) {
+            audioRecorder = new AudioRecorder();
+        }
 
         File cacheDir = getCacheDir();
+
         if (cacheDir == null) {
-            Toast.makeText(this, "Cannot access storage", Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    "Cannot access storage",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             return;
         }
-        currentAudioFile = cacheDir.getAbsolutePath() + "/voice_" + System.currentTimeMillis() + ".m4a";
-        recordingStartTime = System.currentTimeMillis();
+
+        currentAudioFile =
+                cacheDir.getAbsolutePath()
+                        + "/voice_"
+                        + System.currentTimeMillis()
+                        + ".m4a";
+
+        recordingStartTime =
+                System.currentTimeMillis();
 
         try {
-            audioRecorder.startRecording(currentAudioFile, amplitude -> updateVisualizer(amplitude));
+
+            audioRecorder.startRecording(
+                    currentAudioFile,
+                    amplitude ->
+                            updateVisualizer(amplitude)
+            );
+
             isRecordingAudio = true;
+
             showRecordingOverlay();
+
         } catch (IOException e) {
-            Toast.makeText(this, "Failed to start recording", Toast.LENGTH_SHORT).show();
+
+            Toast.makeText(
+                    this,
+                    "Failed to start recording",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
     }
 
     private void updateVisualizer(int amplitude) {
+
         if (viewVisualizer != null) {
-            float scale = Math.min(amplitude / 32768f, 1.0f);
-            viewVisualizer.setScaleX(0.5f + scale * 1.5f);
-            viewVisualizer.setScaleY(0.5f + scale * 1.5f);
+
+            float scale =
+                    Math.min(
+                            amplitude / 32768f,
+                            1.0f
+                    );
+
+            viewVisualizer.setScaleX(
+                    0.5f + scale * 1.5f
+            );
+
+            viewVisualizer.setScaleY(
+                    0.5f + scale * 1.5f
+            );
         }
     }
 
     private void showRecordingOverlay() {
-        if (llRecordingOverlay != null) llRecordingOverlay.setVisibility(View.VISIBLE);
+
+        if (llRecordingOverlay != null) {
+            llRecordingOverlay.setVisibility(
+                    View.VISIBLE
+            );
+        }
+
         startRecordingTimer();
     }
 
     private void hideRecordingOverlay() {
-        if (llRecordingOverlay != null) llRecordingOverlay.setVisibility(View.GONE);
+
+        if (llRecordingOverlay != null) {
+            llRecordingOverlay.setVisibility(
+                    View.GONE
+            );
+        }
     }
 
     private void startRecordingTimer() {
-        final long[] startTime = {System.currentTimeMillis()};
-        recordingHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRecordingAudio && tvRecordingTime != null) {
-                    long elapsed = System.currentTimeMillis() - startTime[0];
-                    long seconds = elapsed / 1000;
-                    long minutes = seconds / 60;
-                    seconds = seconds % 60;
-                    tvRecordingTime.setText(String.format("%02d:%02d", minutes, seconds));
-                    recordingHandler.postDelayed(this, 1000);
-                }
-            }
-        }, 0);
+
+        final long[] startTime = {
+                System.currentTimeMillis()
+        };
+
+        recordingHandler.postDelayed(
+                new Runnable() {
+
+                    @Override
+                    public void run() {
+
+                        if (isRecordingAudio
+                                && tvRecordingTime != null) {
+
+                            long elapsed =
+                                    System.currentTimeMillis()
+                                            - startTime[0];
+
+                            long seconds =
+                                    elapsed / 1000;
+
+                            long minutes =
+                                    seconds / 60;
+
+                            seconds =
+                                    seconds % 60;
+
+                            tvRecordingTime.setText(
+                                    String.format(
+                                            "%02d:%02d",
+                                            minutes,
+                                            seconds
+                                    )
+                            );
+
+                            recordingHandler.postDelayed(
+                                    this,
+                                    1000
+                            );
+                        }
+                    }
+                },
+                0
+        );
     }
 
     private void stopVoiceRecordingAndSend() {
-        if (audioRecorder != null && isRecordingAudio) {
-            int duration = (int) ((System.currentTimeMillis() - recordingStartTime) / 1000);
+
+        if (audioRecorder != null
+                && isRecordingAudio) {
+
+            int duration =
+                    (int) (
+                            (
+                                    System.currentTimeMillis()
+                                            - recordingStartTime
+                            ) / 1000
+                    );
+
             audioRecorder.stopRecording();
+
             isRecordingAudio = false;
+
             hideRecordingOverlay();
 
             if (duration < 1) {
-                Toast.makeText(this, "Too short", Toast.LENGTH_SHORT).show();
+
+                Toast.makeText(
+                        this,
+                        "Too short",
+                        Toast.LENGTH_SHORT
+                ).show();
+
                 return;
             }
 
-            File audioFile = new File(currentAudioFile);
+            File audioFile =
+                    new File(currentAudioFile);
+
             if (audioFile.exists()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    fileUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", audioFile);
+
+                if (Build.VERSION.SDK_INT
+                        >= Build.VERSION_CODES.N) {
+
+                    fileUri =
+                            FileProvider.getUriForFile(
+                                    this,
+                                    getPackageName()
+                                            + ".fileprovider",
+                                    audioFile
+                            );
+
                 } else {
-                    fileUri = Uri.fromFile(audioFile);
+
+                    fileUri =
+                            Uri.fromFile(audioFile);
                 }
-                uploadVoiceMessageAndSend(duration);
+
+                uploadVoiceMessageAndSend(
+                        duration
+                );
             }
         }
     }
 
-    private void uploadVoiceMessageAndSend(int duration) {
-        if (fileUri == null) return;
-        Toast.makeText(this, "Sending voice...", Toast.LENGTH_SHORT).show();
+    private void uploadVoiceMessageAndSend(
+            int duration
+    ) {
 
-        String fileName = System.currentTimeMillis() + "_" + (fileUri.getLastPathSegment() != null ? fileUri.getLastPathSegment() : "voice.m4a");
-        StorageReference storageRef = FirebaseStorage.getInstance().getReference("chat_attachments").child(chatId).child(fileName);
+        if (fileUri == null) {
+            return;
+        }
 
-        storageRef.putFile(fileUri)
-                .continueWithTask(task -> { if (!task.isSuccessful()) throw task.getException() != null ? task.getException() : new Exception("Upload failed"); return storageRef.getDownloadUrl(); })
+        Toast.makeText(
+                this,
+                "Sending voice...",
+                Toast.LENGTH_SHORT
+        ).show();
+
+        String fileName =
+                System.currentTimeMillis()
+                        + "_"
+                        + (
+                        fileUri.getLastPathSegment() != null
+                                ? fileUri.getLastPathSegment()
+                                : "voice.m4a"
+                );
+
+        StorageReference storageRef =
+                FirebaseStorage.getInstance()
+                        .getReference(
+                                "chat_attachments"
+                        )
+                        .child(chatId)
+                        .child(fileName);
+
+        storageRef
+                .putFile(fileUri)
+                .continueWithTask(task -> {
+
+                    if (!task.isSuccessful()) {
+
+                        throw task.getException() != null
+                                ? task.getException()
+                                : new Exception(
+                                "Upload failed"
+                        );
+                    }
+
+                    return storageRef.getDownloadUrl();
+
+                })
                 .addOnCompleteListener(task -> {
+
                     if (task.isSuccessful()) {
-                        String downloadUrl = task.getResult().toString();
-                        sendVoiceMessage(downloadUrl, duration);
+
+                        String downloadUrl =
+                                task.getResult().toString();
+
+                        sendVoiceMessage(
+                                downloadUrl,
+                                duration
+                        );
+
                     } else {
-                        Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show();
+
+                        Toast.makeText(
+                                this,
+                                "Upload failed",
+                                Toast.LENGTH_SHORT
+                        ).show();
                     }
                 });
     }
 
-    private void sendVoiceMessage(String fileUrl, int duration) {
-        if (chatRef == null || currentUserId == null) return;
-        String msgId = chatRef.push().getKey();
-        if (msgId == null) return;
-        long timestamp = System.currentTimeMillis();
+    private void sendVoiceMessage(
+            String fileUrl,
+            int duration
+    ) {
 
-        ChatMessage msg = new ChatMessage(msgId, currentUserId, "Voice message", "voice", fileUrl, timestamp);
+        if (chatRef == null
+                || currentUserId == null) {
+
+            return;
+        }
+
+        String msgId =
+                chatRef.push().getKey();
+
+        if (msgId == null) {
+            return;
+        }
+
+        long timestamp =
+                System.currentTimeMillis();
+
+        ChatMessage msg =
+                new ChatMessage(
+                        msgId,
+                        currentUserId,
+                        "Voice message",
+                        "voice",
+                        fileUrl,
+                        timestamp
+                );
+
         msg.setVoiceDuration(duration);
 
-        chatRef.child(msgId).setValue(msg)
-                .addOnSuccessListener(aVoid -> updateChatMeta("Voice message", timestamp, "voice"));
+        chatRef
+                .child(msgId)
+                .setValue(msg)
+                .addOnSuccessListener(
+                        aVoid ->
+                                updateChatMeta(
+                                        "Voice message",
+                                        timestamp,
+                                        "voice"
+                                )
+                );
     }
 
     // ================== FIREBASE ==================
+
     private void loadReceiverName() {
+
         try {
-            FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                    .getReference("users").child(otherUserId).child("name")
-                    .addListenerForSingleValueEvent(new ValueEventListener() {
-                        @Override
-                        public void onDataChange(@NonNull DataSnapshot snapshot) {
-                            String name = snapshot.getValue(String.class);
-                            if (name != null && tvUserName != null) {
-                                tvUserName.setText(name);
+
+            FirebaseDatabase.getInstance(
+                            FIREBASE_DB_URL
+                    )
+                    .getReference("users")
+                    .child(otherUserId)
+                    .child("name")
+                    .addListenerForSingleValueEvent(
+                            new ValueEventListener() {
+
+                                @Override
+                                public void onDataChange(
+                                        @NonNull DataSnapshot snapshot
+                                ) {
+
+                                    String name =
+                                            snapshot.getValue(
+                                                    String.class
+                                            );
+
+                                    if (name != null
+                                            && tvUserName != null) {
+
+                                        tvUserName.setText(name);
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(
+                                        @NonNull DatabaseError error
+                                ) {
+                                }
                             }
-                        }
-                        @Override
-                        public void onCancelled(@NonNull DatabaseError error) {}
-                    });
-        } catch (Exception ignored) {}
+                    );
+
+        } catch (Exception ignored) {
+        }
     }
 
     private void setupFirebase() {
-        // 🔥 FIX: Նախորդ listener-ը հեռացնում ենք
-        if (msgListener != null && chatRef != null) {
-            chatRef.removeEventListener(msgListener);
+
+        if (msgListener != null
+                && chatRef != null) {
+
+            chatRef.removeEventListener(
+                    msgListener
+            );
         }
 
         try {
-            chatRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                    .getReference("chats").child(chatId).child("messages");
-            Query query = chatRef.orderByKey().limitToLast(50);
 
-            msgListener = new ChildEventListener() {
-                @Override
-                public void onChildAdded(@NonNull DataSnapshot snapshot, String prev) {
-                    ChatMessage msg = snapshot.getValue(ChatMessage.class);
-                    if (msg != null && adapter != null) {
-                        messageList.add(msg);
-                        adapter.notifyItemInserted(messageList.size() - 1);
-                        if (recyclerView != null) {
-                            recyclerView.smoothScrollToPosition(messageList.size() - 1);
+            chatRef =
+                    FirebaseDatabase
+                            .getInstance(FIREBASE_DB_URL)
+                            .getReference("chats")
+                            .child(chatId)
+                            .child("messages");
+
+            Query query =
+                    chatRef
+                            .orderByKey()
+                            .limitToLast(50);
+
+            msgListener =
+                    new ChildEventListener() {
+
+                        @Override
+                        public void onChildAdded(
+                                @NonNull DataSnapshot snapshot,
+                                String prev
+                        ) {
+
+                            ChatMessage msg =
+                                    snapshot.getValue(
+                                            ChatMessage.class
+                                    );
+
+                            if (msg != null
+                                    && adapter != null) {
+
+                                messageList.add(msg);
+
+                                adapter.notifyItemInserted(
+                                        messageList.size() - 1
+                                );
+
+                                if (recyclerView != null) {
+
+                                    recyclerView.smoothScrollToPosition(
+                                            messageList.size() - 1
+                                    );
+                                }
+                            }
                         }
-                    }
-                }
-                @Override public void onChildChanged(@NonNull DataSnapshot s, String p) {}
-                @Override public void onChildRemoved(@NonNull DataSnapshot s) {}
-                @Override public void onChildMoved(@NonNull DataSnapshot s, String p) {}
-                @Override public void onCancelled(@NonNull DatabaseError error) {
-                    Toast.makeText(ChatActivity.this, "Failed to load messages", Toast.LENGTH_SHORT).show();
-                }
-            };
-            query.addChildEventListener(msgListener);
+
+                        @Override
+                        public void onChildChanged(
+                                @NonNull DataSnapshot s,
+                                String p
+                        ) {
+                        }
+
+                        @Override
+                        public void onChildRemoved(
+                                @NonNull DataSnapshot s
+                        ) {
+                        }
+
+                        @Override
+                        public void onChildMoved(
+                                @NonNull DataSnapshot s,
+                                String p
+                        ) {
+                        }
+
+                        @Override
+                        public void onCancelled(
+                                @NonNull DatabaseError error
+                        ) {
+
+                            Toast.makeText(
+                                    ChatActivity.this,
+                                    "Failed to load messages",
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                        }
+                    };
+
+            query.addChildEventListener(
+                    msgListener
+            );
+
         } catch (Exception e) {
-            Toast.makeText(this, "Chat initialization error", Toast.LENGTH_SHORT).show();
+
+            Toast.makeText(
+                    this,
+                    "Chat initialization error",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
     }
 
     private void sendTextMessage() {
-        if (etMessage == null) return;
-        String text = etMessage.getText().toString().trim();
-        if (text.isEmpty()) return;
-        sendMessage("text", text, null);
+
+        if (etMessage == null) {
+            return;
+        }
+
+        String text =
+                etMessage
+                        .getText()
+                        .toString()
+                        .trim();
+
+        if (text.isEmpty()) {
+            return;
+        }
+
+        sendMessage(
+                "text",
+                text,
+                null
+        );
     }
 
-    private void sendMessage(String type, String content, String fileUrl) {
-        if (chatRef == null || currentUserId == null) return;
-        String msgId = chatRef.push().getKey();
-        if (msgId == null) return;
-        long timestamp = System.currentTimeMillis();
-        ChatMessage msg = new ChatMessage(msgId, currentUserId, content, type, fileUrl, timestamp);
-        chatRef.child(msgId).setValue(msg)
-                .addOnSuccessListener(aVoid -> {
-                    if (etMessage != null) etMessage.setText("");
-                    updateChatMeta(content, timestamp, type);
-                });
+    private void sendMessage(
+            String type,
+            String content,
+            String fileUrl
+    ) {
+
+        if (chatRef == null
+                || currentUserId == null) {
+
+            return;
+        }
+
+        String msgId =
+                chatRef.push().getKey();
+
+        if (msgId == null) {
+            return;
+        }
+
+        long timestamp =
+                System.currentTimeMillis();
+
+        ChatMessage msg =
+                new ChatMessage(
+                        msgId,
+                        currentUserId,
+                        content,
+                        type,
+                        fileUrl,
+                        timestamp
+                );
+
+        chatRef
+                .child(msgId)
+                .setValue(msg)
+                .addOnSuccessListener(
+                        aVoid -> {
+
+                            if (etMessage != null) {
+                                etMessage.setText("");
+                            }
+
+                            updateChatMeta(
+                                    content,
+                                    timestamp,
+                                    type
+                            );
+                        }
+                );
     }
 
-    private void updateChatMeta(String lastMsg, long timestamp, String type) {
+    private void updateChatMeta(
+            String lastMsg,
+            long timestamp,
+            String type
+    ) {
+
         try {
-            DatabaseReference userChatsRef = FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                    .getReference("user_chats");
-            Map<String, Object> updates = new HashMap<>();
-            updates.put(currentUserId + "/" + otherUserId + "/lastMessage", lastMsg);
-            updates.put(currentUserId + "/" + otherUserId + "/timestamp", timestamp);
-            updates.put(currentUserId + "/" + otherUserId + "/chatId", chatId);
-            updates.put(currentUserId + "/" + otherUserId + "/lastMessageType", type);
 
-            Map<String, Object> otherUpdates = new HashMap<>();
-            otherUpdates.put("lastMessage", lastMsg);
-            otherUpdates.put("timestamp", timestamp);
-            otherUpdates.put("chatId", chatId);
-            otherUpdates.put("lastMessageType", type);
-            otherUpdates.put("unreadCount", ServerValue.increment(1));
-            updates.put(otherUserId + "/" + currentUserId, otherUpdates);
-            userChatsRef.updateChildren(updates);
-        } catch (Exception ignored) {}
+            DatabaseReference userChatsRef =
+                    FirebaseDatabase
+                            .getInstance(FIREBASE_DB_URL)
+                            .getReference("user_chats");
+
+            Map<String, Object> updates =
+                    new HashMap<>();
+
+            updates.put(
+                    currentUserId
+                            + "/"
+                            + otherUserId
+                            + "/lastMessage",
+                    lastMsg
+            );
+
+            updates.put(
+                    currentUserId
+                            + "/"
+                            + otherUserId
+                            + "/timestamp",
+                    timestamp
+            );
+
+            updates.put(
+                    currentUserId
+                            + "/"
+                            + otherUserId
+                            + "/chatId",
+                    chatId
+            );
+
+            updates.put(
+                    currentUserId
+                            + "/"
+                            + otherUserId
+                            + "/lastMessageType",
+                    type
+            );
+
+            Map<String, Object> otherUpdates =
+                    new HashMap<>();
+
+            otherUpdates.put(
+                    "lastMessage",
+                    lastMsg
+            );
+
+            otherUpdates.put(
+                    "timestamp",
+                    timestamp
+            );
+
+            otherUpdates.put(
+                    "chatId",
+                    chatId
+            );
+
+            otherUpdates.put(
+                    "lastMessageType",
+                    type
+            );
+
+            otherUpdates.put(
+                    "unreadCount",
+                    ServerValue.increment(1)
+            );
+
+            updates.put(
+                    otherUserId
+                            + "/"
+                            + currentUserId,
+                    otherUpdates
+            );
+
+            userChatsRef.updateChildren(
+                    updates
+            );
+
+        } catch (Exception ignored) {
+        }
     }
 
     // 🔥 MARK MESSAGES AS READ — update Firebase + local
+
     private void markMessagesAsRead() {
+
         try {
-            FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+
+            FirebaseDatabase
+                    .getInstance(FIREBASE_DB_URL)
                     .getReference("user_chats")
                     .child(currentUserId)
                     .child(otherUserId)
                     .child("unreadCount")
                     .setValue(0);
 
-            for (ChatMessage msg : messageList) {
-                if (msg.getSenderId() != null && !msg.getSenderId().equals(currentUserId) && !msg.isRead()) {
+            for (ChatMessage msg :
+                    messageList) {
+
+                if (msg.getSenderId() != null
+                        && !msg.getSenderId()
+                        .equals(currentUserId)
+                        && !msg.isRead()) {
+
                     msg.setRead(true);
+
                     if (chatRef != null) {
-                        chatRef.child(msg.getId()).child("isRead").setValue(true);
+
+                        chatRef
+                                .child(msg.getId())
+                                .child("isRead")
+                                .setValue(true);
                     }
                 }
             }
+
             if (adapter != null) {
                 adapter.notifyDataSetChanged();
             }
-        } catch (Exception ignored) {}
+
+        } catch (Exception ignored) {
+        }
     }
 
     // ================== ATTACHMENTS ==================
+
     private void showAttachmentDialog() {
+
         try {
-            String[] options = {"Image", "File"};
+
+            String[] options = {
+                    "Image",
+                    "File"
+            };
+
             new AlertDialog.Builder(this)
                     .setTitle("Attach")
-                    .setItems(options, (dialog, which) -> {
-                        if (which == 0) {
-                            Intent intent = new Intent(Intent.ACTION_PICK);
-                            intent.setType("image/*");
-                            startActivityForResult(intent, PICK_IMAGE);
-                        } else {
-                            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                            intent.setType("*/*");
-                            startActivityForResult(intent, PICK_FILE);
-                        }
-                    }).show();
+                    .setItems(
+                            options,
+                            (dialog, which) -> {
+
+                                if (which == 0) {
+
+                                    Intent intent =
+                                            new Intent(
+                                                    Intent.ACTION_PICK
+                                            );
+
+                                    intent.setType(
+                                            "image/*"
+                                    );
+
+                                    startActivityForResult(
+                                            intent,
+                                            PICK_IMAGE
+                                    );
+
+                                } else {
+
+                                    Intent intent =
+                                            new Intent(
+                                                    Intent.ACTION_GET_CONTENT
+                                            );
+
+                                    intent.setType("*/*");
+
+                                    startActivityForResult(
+                                            intent,
+                                            PICK_FILE
+                                    );
+                                }
+                            }
+                    )
+                    .show();
+
         } catch (Exception e) {
-            Toast.makeText(this, "Attachment error", Toast.LENGTH_SHORT).show();
+
+            Toast.makeText(
+                    this,
+                    "Attachment error",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            @Nullable Intent data
+    ) {
+
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
+
+        if (resultCode == RESULT_OK
+                && data != null
+                && data.getData() != null) {
+
             fileUri = data.getData();
+
             uploadFileAndSend("file");
         }
     }
 
-    private void uploadFileAndSend(String messageType) {
-        if (fileUri == null) return;
-        Toast.makeText(this, "Uploading...", Toast.LENGTH_SHORT).show();
+    private void uploadFileAndSend(
+            String messageType
+    ) {
 
-        String fileName = System.currentTimeMillis() + "_" + (fileUri.getLastPathSegment() != null ? fileUri.getLastPathSegment() : "file");
-        StorageReference storageRef = FirebaseStorage.getInstance().getReference("chat_attachments").child(chatId).child(fileName);
+        if (fileUri == null) {
+            return;
+        }
 
-        storageRef.putFile(fileUri)
+        Toast.makeText(
+                this,
+                "Uploading...",
+                Toast.LENGTH_SHORT
+        ).show();
+
+        String fileName =
+                System.currentTimeMillis()
+                        + "_"
+                        + (
+                        fileUri.getLastPathSegment() != null
+                                ? fileUri.getLastPathSegment()
+                                : "file"
+                );
+
+        StorageReference storageRef =
+                FirebaseStorage
+                        .getInstance()
+                        .getReference("chat_attachments")
+                        .child(chatId)
+                        .child(fileName);
+
+        storageRef
+                .putFile(fileUri)
                 .continueWithTask(task -> {
-                    if (!task.isSuccessful()) throw task.getException() != null ? task.getException() : new Exception("Upload failed");
+
+                    if (!task.isSuccessful()) {
+
+                        throw task.getException() != null
+                                ? task.getException()
+                                : new Exception(
+                                "Upload failed"
+                        );
+                    }
+
                     return storageRef.getDownloadUrl();
+
                 })
                 .addOnCompleteListener(task -> {
+
                     if (task.isSuccessful()) {
-                        String downloadUrl = task.getResult().toString();
-                        String displayName = fileUri.getLastPathSegment();
-                        String finalType = messageType;
+
+                        String downloadUrl =
+                                task.getResult().toString();
+
+                        String displayName =
+                                fileUri.getLastPathSegment();
+
+                        String finalType =
+                                messageType;
+
                         if ("file".equals(messageType)) {
-                            finalType = (fileUri.toString().contains("image")) ? "image" : "file";
+
+                            finalType =
+                                    fileUri.toString()
+                                            .contains("image")
+                                            ? "image"
+                                            : "file";
                         }
-                        sendMessage(finalType, displayName, downloadUrl);
-                        Toast.makeText(this, "Upload successful", Toast.LENGTH_SHORT).show();
+
+                        sendMessage(
+                                finalType,
+                                displayName,
+                                downloadUrl
+                        );
+
+                        Toast.makeText(
+                                this,
+                                "Upload successful",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
                     } else {
-                        Exception e = task.getException();
-                        Toast.makeText(this, "Upload failed: " + (e != null ? e.getMessage() : "Unknown error"), Toast.LENGTH_LONG).show();
+
+                        Exception e =
+                                task.getException();
+
+                        Toast.makeText(
+                                this,
+                                "Upload failed: "
+                                        + (
+                                        e != null
+                                                ? e.getMessage()
+                                                : "Unknown error"
+                                ),
+                                Toast.LENGTH_LONG
+                        ).show();
                     }
                 });
     }
 
-    public void openFile(String fileUrl) {
-        if (fileUrl == null || fileUrl.isEmpty()) {
-            Toast.makeText(this, "Invalid file URL", Toast.LENGTH_SHORT).show();
+    public void openFile(
+            String fileUrl
+    ) {
+
+        if (fileUrl == null
+                || fileUrl.isEmpty()) {
+
+            Toast.makeText(
+                    this,
+                    "Invalid file URL",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             return;
         }
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.parse(fileUrl), getMimeTypeFromUrl(fileUrl));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            try { startActivity(Intent.createChooser(intent, "Open with")); return; } catch (ActivityNotFoundException ignored) {}
-        }
-        Toast.makeText(this, "Downloading file...", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
+
+        Intent intent =
+                new Intent(
+                        Intent.ACTION_VIEW
+                );
+
+        intent.setDataAndType(
+                Uri.parse(fileUrl),
+                getMimeTypeFromUrl(fileUrl)
+        );
+
+        intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+        );
+
+        if (intent.resolveActivity(
+                getPackageManager()
+        ) != null) {
+
             try {
-                URL url = new URL(fileUrl);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setConnectTimeout(10000); connection.setReadTimeout(10000); connection.connect();
-                String fName = Uri.parse(fileUrl).getLastPathSegment();
-                if (fName == null || !fName.contains(".")) fName = "file_" + System.currentTimeMillis();
-                File tempFile = new File(getCacheDir(), fName);
-                try (InputStream input = connection.getInputStream(); FileOutputStream out = new FileOutputStream(tempFile)) {
-                    byte[] buffer = new byte[4096]; int bytesRead;
-                    while ((bytesRead = input.read(buffer)) != -1) out.write(buffer, 0, bytesRead);
-                }
-                connection.disconnect();
-                runOnUiThread(() -> openLocalFile(tempFile));
-            } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+
+                startActivity(
+                        Intent.createChooser(
+                                intent,
+                                "Open with"
+                        )
+                );
+
+                return;
+
+            } catch (ActivityNotFoundException ignored) {
             }
+        }
+
+        Toast.makeText(
+                this,
+                "Downloading file...",
+                Toast.LENGTH_SHORT
+        ).show();
+
+        new Thread(() -> {
+
+            try {
+
+                URL url =
+                        new URL(fileUrl);
+
+                HttpURLConnection connection =
+                        (HttpURLConnection)
+                                url.openConnection();
+
+                connection.setConnectTimeout(
+                        10000
+                );
+
+                connection.setReadTimeout(
+                        10000
+                );
+
+                connection.connect();
+
+                String fName =
+                        Uri.parse(fileUrl)
+                                .getLastPathSegment();
+
+                if (fName == null
+                        || !fName.contains(".")) {
+
+                    fName =
+                            "file_"
+                                    + System.currentTimeMillis();
+                }
+
+                File tempFile =
+                        new File(
+                                getCacheDir(),
+                                fName
+                        );
+
+                try (
+                        InputStream input =
+                                connection
+                                        .getInputStream();
+
+                        FileOutputStream out =
+                                new FileOutputStream(
+                                        tempFile
+                                )
+                ) {
+
+                    byte[] buffer =
+                            new byte[4096];
+
+                    int bytesRead;
+
+                    while (
+                            (bytesRead =
+                                    input.read(buffer))
+                                    != -1
+                    ) {
+
+                        out.write(
+                                buffer,
+                                0,
+                                bytesRead
+                        );
+                    }
+                }
+
+                connection.disconnect();
+
+                runOnUiThread(
+                        () ->
+                                openLocalFile(
+                                        tempFile
+                                )
+                );
+
+            } catch (Exception e) {
+
+                runOnUiThread(
+                        () ->
+                                Toast.makeText(
+                                        this,
+                                        "Download failed: "
+                                                + e.getMessage(),
+                                        Toast.LENGTH_LONG
+                                ).show()
+                );
+            }
+
         }).start();
     }
 
-    private String getMimeTypeFromUrl(String url) {
-        try { String ext = MimeTypeMap.getFileExtensionFromUrl(url); if (ext != null) return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase()); } catch (Exception ignored) {}
+    private String getMimeTypeFromUrl(
+            String url
+    ) {
+
+        try {
+
+            String ext =
+                    MimeTypeMap
+                            .getFileExtensionFromUrl(
+                                    url
+                            );
+
+            if (ext != null) {
+
+                return MimeTypeMap
+                        .getSingleton()
+                        .getMimeTypeFromExtension(
+                                ext.toLowerCase()
+                        );
+            }
+
+        } catch (Exception ignored) {
+        }
+
         return "*/*";
     }
 
-    private void openLocalFile(File file) {
-        if (file == null || !file.exists()) { Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show(); return; }
+    private void openLocalFile(
+            File file
+    ) {
+
+        if (file == null
+                || !file.exists()) {
+
+            Toast.makeText(
+                    this,
+                    "File not found",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
         try {
-            Uri uri = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ? FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file) : Uri.fromFile(file);
-            String mimeType = getMimeType(file); if (mimeType == null) mimeType = "*/*";
-            Intent intent = new Intent(Intent.ACTION_VIEW); intent.setDataAndType(uri, mimeType); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(intent, "Open with"));
-        } catch (ActivityNotFoundException e) { Toast.makeText(this, "No app found to open this file", Toast.LENGTH_SHORT).show(); } catch (Exception e) { Toast.makeText(this, "Error opening file", Toast.LENGTH_SHORT).show(); }
+
+            Uri uri;
+
+            if (Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES.N) {
+
+                uri =
+                        FileProvider.getUriForFile(
+                                this,
+                                getPackageName()
+                                        + ".fileprovider",
+                                file
+                        );
+
+            } else {
+
+                uri =
+                        Uri.fromFile(file);
+            }
+
+            String mimeType =
+                    getMimeType(file);
+
+            if (mimeType == null) {
+                mimeType = "*/*";
+            }
+
+            Intent intent =
+                    new Intent(
+                            Intent.ACTION_VIEW
+                    );
+
+            intent.setDataAndType(
+                    uri,
+                    mimeType
+            );
+
+            intent.addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+            );
+
+            startActivity(
+                    Intent.createChooser(
+                            intent,
+                            "Open with"
+                    )
+            );
+
+        } catch (ActivityNotFoundException e) {
+
+            Toast.makeText(
+                    this,
+                    "No app found to open this file",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Error opening file",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
-    private String getMimeType(File file) {
-        try { String ext = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath()); if (ext != null) return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase()); } catch (Exception ignored) {}
+    private String getMimeType(
+            File file
+    ) {
+
+        try {
+
+            String ext =
+                    MimeTypeMap
+                            .getFileExtensionFromUrl(
+                                    file.getAbsolutePath()
+                            );
+
+            if (ext != null) {
+
+                return MimeTypeMap
+                        .getSingleton()
+                        .getMimeTypeFromExtension(
+                                ext.toLowerCase()
+                        );
+            }
+
+        } catch (Exception ignored) {
+        }
+
         return null;
     }
 
     @Override
     protected void onDestroy() {
+
         super.onDestroy();
-        if (msgListener != null && chatRef != null) { try { chatRef.removeEventListener(msgListener); } catch (Exception ignored) {} }
-        if (adapter != null) { try { adapter.stopPlaying(); } catch (Exception ignored) {} }
-        if (audioRecorder != null && isRecordingAudio) { try { audioRecorder.stopRecording(); } catch (Exception ignored) {} }
-        if (recordingHandler != null) { recordingHandler.removeCallbacksAndMessages(null); }
+
+        if (msgListener != null
+                && chatRef != null) {
+
+            try {
+
+                chatRef.removeEventListener(
+                        msgListener
+                );
+
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (adapter != null) {
+
+            try {
+                adapter.stopPlaying();
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (audioRecorder != null
+                && isRecordingAudio) {
+
+            try {
+                audioRecorder.stopRecording();
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (recordingHandler != null) {
+
+            recordingHandler
+                    .removeCallbacksAndMessages(
+                            null
+                    );
+        }
     }
 }

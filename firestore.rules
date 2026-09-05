@@ -1,0 +1,120 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // =========================
+    // USERS
+    // =========================
+    match /users/{userId} {
+      allow read: if signedIn();
+
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    // =========================
+    // SERVICES
+    // =========================
+    match /services/{serviceId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+      && request.resource.data.userId == request.auth.uid;
+
+      allow update: if signedIn()
+      && resource.data.userId == request.auth.uid
+      && request.resource.data.userId == resource.data.userId;
+
+      allow delete: if signedIn()
+      && resource.data.userId == request.auth.uid;
+
+      // REVIEWS
+      match /reviews/{reviewId} {
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+        allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+        allow delete: if signedIn()
+        && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // =========================
+    // CALLS
+    // =========================
+    match /calls/{callId} {
+
+      allow read: if signedIn()
+      && (
+        callId == request.auth.uid
+        || resource.data.callerId == request.auth.uid
+      );
+
+      allow create: if signedIn()
+      && callId != request.auth.uid
+      && request.resource.data.callerId == request.auth.uid
+      && request.resource.data.channelName is string
+      && request.resource.data.status is string;
+
+      allow create: if signedIn()
+      && callId == request.auth.uid
+      && request.resource.data.otherUserId is string
+      && request.resource.data.channelName is string
+      && request.resource.data.status is string;
+
+      allow update: if signedIn()
+      && (
+        callId == request.auth.uid
+        || resource.data.callerId == request.auth.uid
+      );
+
+      allow delete: if signedIn()
+      && (
+        callId == request.auth.uid
+        || resource.data.callerId == request.auth.uid
+      );
+    }
+
+    // =========================
+    // COMPLAINTS
+    // =========================
+    match /complaints/{complaintId} {
+      allow create: if signedIn()
+      && request.resource.data.reporterId == request.auth.uid
+      && request.resource.data.serviceId is string
+      && request.resource.data.targetUserId is string
+      && request.resource.data.reason is string
+      && request.resource.data.timestamp is int;
+
+      allow read, update, delete: if false;
+    }
+
+    // =========================
+    // DENY EVERYTHING ELSE
+    // =========================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
