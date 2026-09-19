@@ -46,8 +46,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile(
+                    "proguard-android-optimize.txt"
+                ),
                 "proguard-rules.pro"
             )
         }
@@ -61,11 +64,20 @@ android {
 
 fun getLocalProperty(key: String): String {
     val properties = Properties()
-    val localPropsFile = rootProject.file("local.properties")
+
+    val localPropsFile =
+        rootProject.file("local.properties")
+
     if (localPropsFile.exists()) {
-        properties.load(FileInputStream(localPropsFile))
+        properties.load(
+            FileInputStream(localPropsFile)
+        )
     }
-    return properties.getProperty(key, "")
+
+    return properties.getProperty(
+        key,
+        ""
+    )
 }
 
 dependencies {
@@ -79,52 +91,96 @@ dependencies {
     implementation("androidx.cardview:cardview:1.0.0")
 
     // Firebase BOM + services
-    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
+    implementation(
+        platform(
+            "com.google.firebase:firebase-bom:34.13.0"
+        )
+    )
+
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-functions")
     implementation("com.google.firebase:firebase-messaging:25.0.2")
     implementation("com.google.firebase:firebase-crashlytics")
 
     // Google Play Services
-    implementation("com.google.android.gms:play-services-auth:21.5.1")
+    implementation(
+        "com.google.android.gms:play-services-auth:21.5.1"
+    )
 
     // Google Gemini AI
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    implementation(
+        "com.google.ai.client.generativeai:generativeai:0.9.0"
+    )
 
     // Retrofit & OkHttp
-    implementation("com.squareup.retrofit2:retrofit:3.0.0")
-    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
-    implementation("com.squareup.okhttp3:okhttp:5.3.2")
-    implementation("com.squareup.okhttp3:logging-interceptor:5.3.2")
+    implementation(
+        "com.squareup.retrofit2:retrofit:3.0.0"
+    )
+    implementation(
+        "com.squareup.retrofit2:converter-gson:3.0.0"
+    )
+    implementation(
+        "com.squareup.okhttp3:okhttp:5.3.2"
+    )
+    implementation(
+        "com.squareup.okhttp3:logging-interceptor:5.3.2"
+    )
 
     // JSON
-    implementation("org.json:json:20251224")
+    implementation(
+        "org.json:json:20251224"
+    )
 
     // CircleImageView
-    implementation("de.hdodenhof:circleimageview:3.1.0")
+    implementation(
+        "de.hdodenhof:circleimageview:3.1.0"
+    )
 
     // Glide
-    implementation("com.github.bumptech.glide:glide:5.0.7")
-    annotationProcessor("com.github.bumptech.glide:compiler:5.0.7")
+    implementation(
+        "com.github.bumptech.glide:glide:5.0.7"
+    )
+    annotationProcessor(
+        "com.github.bumptech.glide:compiler:5.0.7"
+    )
 
     // PhotoView
-    implementation("com.github.chrisbanes:PhotoView:2.3.0")
+    implementation(
+        "com.github.chrisbanes:PhotoView:2.3.0"
+    )
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation(
+        "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
+    )
 
     // Testing
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    testImplementation(
+        "junit:junit:4.13.2"
+    )
+
+    androidTestImplementation(
+        "androidx.test.ext:junit:1.3.0"
+    )
+
+    androidTestImplementation(
+        "androidx.test.espresso:espresso-core:3.7.0"
+    )
 
     // Google Maps
-    implementation("com.google.android.gms:play-services-maps:20.0.0")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation(
+        "com.google.android.gms:play-services-maps:20.0.0"
+    )
+    implementation(
+        "com.google.android.gms:play-services-location:21.3.0"
+    )
 
     // Agora Video SDK
-    implementation("io.agora.rtc:full-sdk:4.6.3")
+    implementation(
+        "io.agora.rtc:full-sdk:4.6.3"
+    )
 }

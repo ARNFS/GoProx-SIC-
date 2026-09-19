@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.MimeTypeMap;
@@ -37,6 +38,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.Query;
 import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
@@ -55,19 +57,29 @@ import de.hdodenhof.circleimageview.CircleImageView;
 
 public class ChatActivity extends BaseActivity {
 
+    private static final String TAG = "ChatActivity";
+
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final int PICK_IMAGE = 100;
     private static final int PICK_FILE = 101;
 
     private RecyclerView recyclerView;
     private EditText etMessage;
-    private ImageButton btnSend, btnAttach, btnBack, btnMic, btnVideoCall;
+    private ImageButton btnSend;
+    private ImageButton btnAttach;
+    private ImageButton btnBack;
+    private ImageButton btnMic;
+    private ImageButton btnVideoCall;
+
     private TextView tvUserName;
     private CircleImageView ivProfilePhoto;
+
     private ChatAdapter adapter;
     private final List<ChatMessage> messageList = new ArrayList<>();
+
     private DatabaseReference chatRef;
     private ChildEventListener msgListener;
+
     private AudioRecorder audioRecorder;
     private String currentAudioFile;
     private volatile boolean isRecordingAudio = false;
@@ -78,7 +90,10 @@ public class ChatActivity extends BaseActivity {
     private View viewVisualizer;
     private long recordingStartTime;
 
-    private String chatId, otherUserId, currentUserId;
+    private String chatId;
+    private String otherUserId;
+    private String currentUserId;
+
     private Uri fileUri;
 
     private final String FIREBASE_DB_URL =
@@ -90,141 +105,450 @@ public class ChatActivity extends BaseActivity {
         setContentView(R.layout.activity_chat);
 
         otherUserId = getIntent().getStringExtra("otherUserId");
-        String otherUserName = getIntent().getStringExtra("otherUserName");
 
-        if (otherUserId == null || otherUserId.isEmpty()) {
-            Toast.makeText(this, "Error: user not specified", Toast.LENGTH_SHORT).show();
+        String otherUserName =
+                getIntent().getStringExtra("otherUserName");
+
+        if (otherUserId == null || otherUserId.trim().isEmpty()) {
+
+            Toast.makeText(
+                    this,
+                    "Error: user not specified",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             finish();
             return;
         }
 
-        FirebaseAuth auth = FirebaseAuth.getInstance();
+        otherUserId = otherUserId.trim();
+
+        FirebaseAuth auth =
+                FirebaseAuth.getInstance();
 
         if (auth.getCurrentUser() == null) {
-            Toast.makeText(this, "Please sign in", Toast.LENGTH_SHORT).show();
+
+            Toast.makeText(
+                    this,
+                    "Please sign in",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             finish();
             return;
         }
 
-        currentUserId = auth.getCurrentUser().getUid();
+        currentUserId =
+                auth.getCurrentUser().getUid();
 
-        chatId = (currentUserId.compareTo(otherUserId) < 0)
-                ? currentUserId + "_" + otherUserId
-                : otherUserId + "_" + currentUserId;
+        chatId =
+                currentUserId.compareTo(otherUserId) < 0
+                        ? currentUserId + "_" + otherUserId
+                        : otherUserId + "_" + currentUserId;
 
-        recordingHandler = new Handler(Looper.getMainLooper());
+        recordingHandler =
+                new Handler(Looper.getMainLooper());
 
-        // 🔥 FIX: Մաքրում ենք messageList-ը նոր chat-ի համար
         messageList.clear();
-
-        // 🔐 Յուրաքանչյուր user գրանցում է միայն ԻՐ UID-ն participants-ում
-        ensureCurrentUserParticipant();
 
         initViews();
 
-        if (otherUserName != null && !otherUserName.isEmpty()) {
+        if (otherUserName != null
+                && !otherUserName.isEmpty()) {
+
             tvUserName.setText(otherUserName);
+
         } else {
+
             loadReceiverName();
         }
 
         loadProfilePhoto();
-        setupFirebase();
-        markMessagesAsRead();
+
+        /*
+         * Participant membership is created by the
+         * trusted Cloud Function.
+         *
+         * The client does NOT write:
+         * /chats/{chatId}/participants/{uid}
+         */
+        ensureCurrentUserParticipant();
     }
 
     // ================== CHAT PARTICIPANT ==================
 
-    /**
-     * Ստեղծում է միայն current user's participant entry-ն։
-     *
-     * Structure:
-     *
-     * chats/
-     *   {chatId}/
-     *     participants/
-     *       {currentUserId}: true
-     */
     private void ensureCurrentUserParticipant() {
-        if (chatId == null || currentUserId == null) {
-            return;
-        }
 
-        try {
-            DatabaseReference participantRef =
-                    FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                            .getReference("chats")
-                            .child(chatId)
-                            .child("participants")
-                            .child(currentUserId);
+        if (chatId == null
+                || chatId.isEmpty()
+                || currentUserId == null
+                || currentUserId.isEmpty()
+                || otherUserId == null
+                || otherUserId.isEmpty()) {
 
-            participantRef.setValue(true)
-                    .addOnFailureListener(e -> {
-                        // Chat-ը չենք կանգնեցնում participant write-ի failure-ի պատճառով։
-                        // Security rules-ի հաջորդ փուլում դա կդառնա backend requirement։
-                    });
+            Toast.makeText(
+                    this,
+                    "Unable to initialize chat",
+                    Toast.LENGTH_SHORT
+            ).show();
 
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void initViews() {
-
-        recyclerView = findViewById(R.id.recyclerViewChat);
-        etMessage = findViewById(R.id.etMessage);
-        btnSend = findViewById(R.id.btnSend);
-        btnAttach = findViewById(R.id.btnAttach);
-        btnBack = findViewById(R.id.btnBack);
-        btnMic = findViewById(R.id.btnMic);
-        btnVideoCall = findViewById(R.id.btnVideoCall);
-        tvUserName = findViewById(R.id.tvUserName);
-        ivProfilePhoto = findViewById(R.id.ivProfilePhoto);
-        llRecordingOverlay = findViewById(R.id.llRecordingOverlay);
-        tvRecordingTime = findViewById(R.id.tvRecordingTime);
-        viewVisualizer = findViewById(R.id.viewVisualizer);
-
-        if (recyclerView == null || btnSend == null || etMessage == null) {
-            Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        adapter = new ChatAdapter(messageList, currentUserId);
+        Log.d(
+                TAG,
+                "Calling ensureChatParticipant. "
+                        + "chatId=" + chatId
+                        + ", currentUserId=" + currentUserId
+                        + ", otherUserId=" + otherUserId
+        );
+
+        Map<String, Object> data =
+                new HashMap<>();
+
+        data.put(
+                "otherUserId",
+                otherUserId
+        );
+
+        try {
+
+            FirebaseFunctions functions =
+                    FirebaseFunctions.getInstance(
+                            "europe-west1"
+                    );
+
+            functions
+                    .getHttpsCallable(
+                            "ensureChatParticipant"
+                    )
+                    .call(data)
+                    .addOnSuccessListener(result -> {
+
+                        Log.d(
+                                TAG,
+                                "ensureChatParticipant SUCCESS: "
+                                        + (
+                                        result != null
+                                                ? String.valueOf(
+                                                result.getData()
+                                        )
+                                                : "null"
+                                )
+                        );
+
+                        if (isFinishing()
+                                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
+                                && isDestroyed())) {
+
+                            return;
+                        }
+
+                        /*
+                         * Do NOT start the messages listener immediately.
+                         *
+                         * First verify that the backend really created
+                         * the current user as a participant.
+                         */
+                        verifyParticipantCreated();
+
+                    })
+                    .addOnFailureListener(error -> {
+
+                        Log.e(
+                                TAG,
+                                "ensureChatParticipant FAILED",
+                                error
+                        );
+
+                        if (isFinishing()
+                                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
+                                && isDestroyed())) {
+
+                            return;
+                        }
+
+                        String message =
+                                error != null
+                                        && error.getMessage() != null
+                                        ? error.getMessage()
+                                        : "Unknown error";
+
+                        Toast.makeText(
+                                this,
+                                "Chat initialization failed: "
+                                        + message,
+                                Toast.LENGTH_LONG
+                        ).show();
+
+                        finish();
+                    });
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Exception while calling ensureChatParticipant",
+                    e
+            );
+
+            Toast.makeText(
+                    this,
+                    "Chat initialization error: "
+                            + e.getMessage(),
+                    Toast.LENGTH_LONG
+            ).show();
+
+            finish();
+        }
+    }
+
+    private void verifyParticipantCreated() {
+
+        if (chatId == null
+                || currentUserId == null) {
+
+            Toast.makeText(
+                    this,
+                    "Invalid chat data",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            finish();
+            return;
+        }
+
+        DatabaseReference participantRef =
+                FirebaseDatabase
+                        .getInstance(FIREBASE_DB_URL)
+                        .getReference("chats")
+                        .child(chatId)
+                        .child("participants")
+                        .child(currentUserId);
+
+        Log.d(
+                TAG,
+                "Checking participant created at: "
+                        + participantRef.toString()
+        );
+
+        participantRef
+                .addListenerForSingleValueEvent(
+                        new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(
+                                    @NonNull DataSnapshot snapshot
+                            ) {
+
+                                Boolean participant =
+                                        snapshot.getValue(
+                                                Boolean.class
+                                        );
+
+                                Log.d(
+                                        TAG,
+                                        "Participant verification result: "
+                                                + participant
+                                );
+
+                                if (Boolean.TRUE.equals(
+                                        participant
+                                )) {
+
+                                    Log.d(
+                                            TAG,
+                                            "Participant verified. "
+                                                    + "Starting Firebase chat."
+                                    );
+
+                                    setupFirebase();
+                                    markMessagesAsRead();
+
+                                } else {
+
+                                    Log.e(
+                                            TAG,
+                                            "Cloud Function returned success "
+                                                    + "but participant was not created."
+                                    );
+
+                                    Toast.makeText(
+                                            ChatActivity.this,
+                                            "Chat participant initialization failed",
+                                            Toast.LENGTH_LONG
+                                    ).show();
+
+                                    finish();
+                                }
+                            }
+
+                            @Override
+                            public void onCancelled(
+                                    @NonNull DatabaseError error
+                            ) {
+
+                                Log.e(
+                                        TAG,
+                                        "Participant verification failed",
+                                        error.toException()
+                                );
+
+                                Toast.makeText(
+                                        ChatActivity.this,
+                                        "Unable to verify chat access: "
+                                                + error.getMessage(),
+                                        Toast.LENGTH_LONG
+                                ).show();
+
+                                finish();
+                            }
+                        }
+                );
+    }
+
+    private void initViews() {
+
+        recyclerView =
+                findViewById(
+                        R.id.recyclerViewChat
+                );
+
+        etMessage =
+                findViewById(
+                        R.id.etMessage
+                );
+
+        btnSend =
+                findViewById(
+                        R.id.btnSend
+                );
+
+        btnAttach =
+                findViewById(
+                        R.id.btnAttach
+                );
+
+        btnBack =
+                findViewById(
+                        R.id.btnBack
+                );
+
+        btnMic =
+                findViewById(
+                        R.id.btnMic
+                );
+
+        btnVideoCall =
+                findViewById(
+                        R.id.btnVideoCall
+                );
+
+        tvUserName =
+                findViewById(
+                        R.id.tvUserName
+                );
+
+        ivProfilePhoto =
+                findViewById(
+                        R.id.ivProfilePhoto
+                );
+
+        llRecordingOverlay =
+                findViewById(
+                        R.id.llRecordingOverlay
+                );
+
+        tvRecordingTime =
+                findViewById(
+                        R.id.tvRecordingTime
+                );
+
+        viewVisualizer =
+                findViewById(
+                        R.id.viewVisualizer
+                );
+
+        if (recyclerView == null
+                || btnSend == null
+                || etMessage == null) {
+
+            Toast.makeText(
+                    this,
+                    "UI initialization error",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            finish();
+            return;
+        }
+
+        adapter =
+                new ChatAdapter(
+                        messageList,
+                        currentUserId
+                );
 
         LinearLayoutManager layoutManager =
                 new LinearLayoutManager(this);
 
         layoutManager.setStackFromEnd(true);
 
-        recyclerView.setLayoutManager(layoutManager);
-        recyclerView.setAdapter(adapter);
-
-        btnSend.setOnClickListener(v -> sendTextMessage());
-
-        btnBack.setOnClickListener(v -> finish());
-
-        btnAttach.setOnClickListener(
-                v -> showAttachmentDialog()
+        recyclerView.setLayoutManager(
+                layoutManager
         );
 
-        btnMic.setOnTouchListener((v, event) -> {
+        recyclerView.setAdapter(
+                adapter
+        );
 
-            switch (event.getAction()) {
+        btnSend.setOnClickListener(
+                v -> sendTextMessage()
+        );
 
-                case MotionEvent.ACTION_DOWN:
-                    checkAndStartVoiceRecording();
-                    return true;
+        btnBack.setOnClickListener(
+                v -> finish()
+        );
 
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    stopVoiceRecordingAndSend();
-                    return true;
-            }
+        if (btnAttach != null) {
 
-            return false;
-        });
+            btnAttach.setOnClickListener(
+                    v -> showAttachmentDialog()
+            );
+        }
+
+        if (btnMic != null) {
+
+            btnMic.setOnTouchListener(
+                    (v, event) -> {
+
+                        switch (event.getAction()) {
+
+                            case MotionEvent.ACTION_DOWN:
+
+                                checkAndStartVoiceRecording();
+
+                                return true;
+
+                            case MotionEvent.ACTION_UP:
+
+                            case MotionEvent.ACTION_CANCEL:
+
+                                stopVoiceRecordingAndSend();
+
+                                return true;
+
+                            default:
+
+                                return false;
+                        }
+                    }
+            );
+        }
 
         if (btnVideoCall != null) {
+
             btnVideoCall.setOnClickListener(
                     v -> CallHelper.startCall(
                             ChatActivity.this,
@@ -242,47 +566,66 @@ public class ChatActivity extends BaseActivity {
 
     private void loadProfilePhoto() {
 
-        if (ivProfilePhoto == null || otherUserId == null) {
+        if (ivProfilePhoto == null
+                || otherUserId == null) {
+
             return;
         }
 
-        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                .getReference("users")
-                .child(otherUserId)
-                .child("photoUrl")
-                .addListenerForSingleValueEvent(
-                        new ValueEventListener() {
+        try {
 
-                            @Override
-                            public void onDataChange(
-                                    @NonNull DataSnapshot snapshot
-                            ) {
+            FirebaseDatabase
+                    .getInstance(FIREBASE_DB_URL)
+                    .getReference("users")
+                    .child(otherUserId)
+                    .child("photoUrl")
+                    .addListenerForSingleValueEvent(
+                            new ValueEventListener() {
 
-                                String photoUrl =
-                                        snapshot.getValue(String.class);
+                                @Override
+                                public void onDataChange(
+                                        @NonNull DataSnapshot snapshot
+                                ) {
 
-                                if (photoUrl != null
-                                        && !photoUrl.isEmpty()) {
+                                    String photoUrl =
+                                            snapshot.getValue(
+                                                    String.class
+                                            );
 
-                                    Glide.with(ChatActivity.this)
-                                            .load(photoUrl)
-                                            .placeholder(
-                                                    R.drawable.ic_profile_placeholder
-                                            )
-                                            .error(
-                                                    R.drawable.ic_profile_placeholder
-                                            )
-                                            .into(ivProfilePhoto);
+                                    if (photoUrl != null
+                                            && !photoUrl.isEmpty()) {
+
+                                        try {
+
+                                            Glide.with(
+                                                            ChatActivity.this
+                                                    )
+                                                    .load(photoUrl)
+                                                    .placeholder(
+                                                            R.drawable.ic_profile_placeholder
+                                                    )
+                                                    .error(
+                                                            R.drawable.ic_profile_placeholder
+                                                    )
+                                                    .into(
+                                                            ivProfilePhoto
+                                                    );
+
+                                        } catch (Exception ignored) {
+                                        }
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(
+                                        @NonNull DatabaseError error
+                                ) {
                                 }
                             }
+                    );
 
-                            @Override
-                            public void onCancelled(
-                                    @NonNull DatabaseError error
-                            ) {
-                            }
-                        }
-                );
+        } catch (Exception ignored) {
+        }
     }
 
     // ================== VOICE RECORDING ==================
@@ -303,6 +646,7 @@ public class ChatActivity extends BaseActivity {
             );
 
         } else {
+
             startVoiceRecording();
         }
     }
@@ -320,7 +664,8 @@ public class ChatActivity extends BaseActivity {
                 grantResults
         );
 
-        if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
+        if (requestCode
+                == REQUEST_RECORD_AUDIO_PERMISSION) {
 
             if (grantResults.length > 0
                     && grantResults[0]
@@ -342,12 +687,16 @@ public class ChatActivity extends BaseActivity {
     private void startVoiceRecording() {
 
         if (audioRecorder == null) {
-            audioRecorder = new AudioRecorder();
+
+            audioRecorder =
+                    new AudioRecorder();
         }
 
-        File cacheDir = getCacheDir();
+        File cacheDir =
+                getCacheDir();
 
         if (cacheDir == null) {
+
             Toast.makeText(
                     this,
                     "Cannot access storage",
@@ -370,8 +719,7 @@ public class ChatActivity extends BaseActivity {
 
             audioRecorder.startRecording(
                     currentAudioFile,
-                    amplitude ->
-                            updateVisualizer(amplitude)
+                    this::updateVisualizer
             );
 
             isRecordingAudio = true;
@@ -388,7 +736,9 @@ public class ChatActivity extends BaseActivity {
         }
     }
 
-    private void updateVisualizer(int amplitude) {
+    private void updateVisualizer(
+            int amplitude
+    ) {
 
         if (viewVisualizer != null) {
 
@@ -411,6 +761,7 @@ public class ChatActivity extends BaseActivity {
     private void showRecordingOverlay() {
 
         if (llRecordingOverlay != null) {
+
             llRecordingOverlay.setVisibility(
                     View.VISIBLE
             );
@@ -422,6 +773,7 @@ public class ChatActivity extends BaseActivity {
     private void hideRecordingOverlay() {
 
         if (llRecordingOverlay != null) {
+
             llRecordingOverlay.setVisibility(
                     View.GONE
             );
@@ -558,7 +910,8 @@ public class ChatActivity extends BaseActivity {
                 );
 
         StorageReference storageRef =
-                FirebaseStorage.getInstance()
+                FirebaseStorage
+                        .getInstance()
                         .getReference(
                                 "chat_attachments"
                         )
@@ -586,7 +939,8 @@ public class ChatActivity extends BaseActivity {
                     if (task.isSuccessful()) {
 
                         String downloadUrl =
-                                task.getResult().toString();
+                                task.getResult()
+                                        .toString();
 
                         sendVoiceMessage(
                                 downloadUrl,
@@ -647,6 +1001,13 @@ public class ChatActivity extends BaseActivity {
                                         timestamp,
                                         "voice"
                                 )
+                )
+                .addOnFailureListener(
+                        error -> Log.e(
+                                TAG,
+                                "Voice message send failed",
+                                error
+                        )
                 );
     }
 
@@ -654,11 +1015,14 @@ public class ChatActivity extends BaseActivity {
 
     private void loadReceiverName() {
 
+        if (otherUserId == null) {
+            return;
+        }
+
         try {
 
-            FirebaseDatabase.getInstance(
-                            FIREBASE_DB_URL
-                    )
+            FirebaseDatabase
+                    .getInstance(FIREBASE_DB_URL)
                     .getReference("users")
                     .child(otherUserId)
                     .child("name")
@@ -678,7 +1042,9 @@ public class ChatActivity extends BaseActivity {
                                     if (name != null
                                             && tvUserName != null) {
 
-                                        tvUserName.setText(name);
+                                        tvUserName.setText(
+                                                name
+                                        );
                                     }
                                 }
 
@@ -696,20 +1062,35 @@ public class ChatActivity extends BaseActivity {
 
     private void setupFirebase() {
 
+        if (chatId == null
+                || chatId.isEmpty()) {
+
+            return;
+        }
+
         if (msgListener != null
                 && chatRef != null) {
 
-            chatRef.removeEventListener(
-                    msgListener
-            );
+            try {
+
+                chatRef.removeEventListener(
+                        msgListener
+                );
+
+            } catch (Exception ignored) {
+            }
         }
 
         try {
 
             chatRef =
                     FirebaseDatabase
-                            .getInstance(FIREBASE_DB_URL)
-                            .getReference("chats")
+                            .getInstance(
+                                    FIREBASE_DB_URL
+                            )
+                            .getReference(
+                                    "chats"
+                            )
                             .child(chatId)
                             .child("messages");
 
@@ -724,7 +1105,7 @@ public class ChatActivity extends BaseActivity {
                         @Override
                         public void onChildAdded(
                                 @NonNull DataSnapshot snapshot,
-                                String prev
+                                String previousChildName
                         ) {
 
                             ChatMessage msg =
@@ -752,21 +1133,21 @@ public class ChatActivity extends BaseActivity {
 
                         @Override
                         public void onChildChanged(
-                                @NonNull DataSnapshot s,
-                                String p
+                                @NonNull DataSnapshot snapshot,
+                                String previousChildName
                         ) {
                         }
 
                         @Override
                         public void onChildRemoved(
-                                @NonNull DataSnapshot s
+                                @NonNull DataSnapshot snapshot
                         ) {
                         }
 
                         @Override
                         public void onChildMoved(
-                                @NonNull DataSnapshot s,
-                                String p
+                                @NonNull DataSnapshot snapshot,
+                                String previousChildName
                         ) {
                         }
 
@@ -775,10 +1156,17 @@ public class ChatActivity extends BaseActivity {
                                 @NonNull DatabaseError error
                         ) {
 
+                            Log.e(
+                                    TAG,
+                                    "Messages listener cancelled",
+                                    error.toException()
+                            );
+
                             Toast.makeText(
                                     ChatActivity.this,
-                                    "Failed to load messages",
-                                    Toast.LENGTH_SHORT
+                                    "Failed to load messages: "
+                                            + error.getMessage(),
+                                    Toast.LENGTH_LONG
                             ).show();
                         }
                     };
@@ -788,6 +1176,12 @@ public class ChatActivity extends BaseActivity {
             );
 
         } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Chat Firebase setup failed",
+                    e
+            );
 
             Toast.makeText(
                     this,
@@ -829,6 +1223,12 @@ public class ChatActivity extends BaseActivity {
         if (chatRef == null
                 || currentUserId == null) {
 
+            Toast.makeText(
+                    this,
+                    "Chat is not ready",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             return;
         }
 
@@ -859,6 +1259,7 @@ public class ChatActivity extends BaseActivity {
                         aVoid -> {
 
                             if (etMessage != null) {
+
                                 etMessage.setText("");
                             }
 
@@ -867,6 +1268,23 @@ public class ChatActivity extends BaseActivity {
                                     timestamp,
                                     type
                             );
+                        }
+                )
+                .addOnFailureListener(
+                        error -> {
+
+                            Log.e(
+                                    TAG,
+                                    "Message send failed",
+                                    error
+                            );
+
+                            Toast.makeText(
+                                    this,
+                                    "Message failed: "
+                                            + error.getMessage(),
+                                    Toast.LENGTH_LONG
+                            ).show();
                         }
                 );
     }
@@ -877,12 +1295,23 @@ public class ChatActivity extends BaseActivity {
             String type
     ) {
 
+        if (currentUserId == null
+                || otherUserId == null
+                || chatId == null) {
+
+            return;
+        }
+
         try {
 
             DatabaseReference userChatsRef =
                     FirebaseDatabase
-                            .getInstance(FIREBASE_DB_URL)
-                            .getReference("user_chats");
+                            .getInstance(
+                                    FIREBASE_DB_URL
+                            )
+                            .getReference(
+                                    "user_chats"
+                            );
 
             Map<String, Object> updates =
                     new HashMap<>();
@@ -958,19 +1387,33 @@ public class ChatActivity extends BaseActivity {
                     updates
             );
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Failed to update chat metadata",
+                    e
+            );
         }
     }
 
-    // 🔥 MARK MESSAGES AS READ — update Firebase + local
-
     private void markMessagesAsRead() {
+
+        if (currentUserId == null
+                || otherUserId == null) {
+
+            return;
+        }
 
         try {
 
             FirebaseDatabase
-                    .getInstance(FIREBASE_DB_URL)
-                    .getReference("user_chats")
+                    .getInstance(
+                            FIREBASE_DB_URL
+                    )
+                    .getReference(
+                            "user_chats"
+                    )
                     .child(currentUserId)
                     .child(otherUserId)
                     .child("unreadCount")
@@ -979,28 +1422,35 @@ public class ChatActivity extends BaseActivity {
             for (ChatMessage msg :
                     messageList) {
 
-                if (msg.getSenderId() != null
+                if (msg != null
+                        && msg.getSenderId() != null
                         && !msg.getSenderId()
                         .equals(currentUserId)
-                        && !msg.isRead()) {
+                        && !msg.isRead()
+                        && chatRef != null
+                        && msg.getId() != null) {
 
                     msg.setRead(true);
 
-                    if (chatRef != null) {
-
-                        chatRef
-                                .child(msg.getId())
-                                .child("isRead")
-                                .setValue(true);
-                    }
+                    chatRef
+                            .child(msg.getId())
+                            .child("isRead")
+                            .setValue(true);
                 }
             }
 
             if (adapter != null) {
+
                 adapter.notifyDataSetChanged();
             }
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Failed to mark messages as read",
+                    e
+            );
         }
     }
 
@@ -1044,7 +1494,9 @@ public class ChatActivity extends BaseActivity {
                                                     Intent.ACTION_GET_CONTENT
                                             );
 
-                                    intent.setType("*/*");
+                                    intent.setType(
+                                            "*/*"
+                                    );
 
                                     startActivityForResult(
                                             intent,
@@ -1082,9 +1534,12 @@ public class ChatActivity extends BaseActivity {
                 && data != null
                 && data.getData() != null) {
 
-            fileUri = data.getData();
+            fileUri =
+                    data.getData();
 
-            uploadFileAndSend("file");
+            uploadFileAndSend(
+                    "file"
+            );
         }
     }
 
@@ -1092,7 +1547,9 @@ public class ChatActivity extends BaseActivity {
             String messageType
     ) {
 
-        if (fileUri == null) {
+        if (fileUri == null
+                || chatId == null) {
+
             return;
         }
 
@@ -1114,7 +1571,9 @@ public class ChatActivity extends BaseActivity {
         StorageReference storageRef =
                 FirebaseStorage
                         .getInstance()
-                        .getReference("chat_attachments")
+                        .getReference(
+                                "chat_attachments"
+                        )
                         .child(chatId)
                         .child(fileName);
 
@@ -1139,19 +1598,32 @@ public class ChatActivity extends BaseActivity {
                     if (task.isSuccessful()) {
 
                         String downloadUrl =
-                                task.getResult().toString();
+                                task.getResult()
+                                        .toString();
 
                         String displayName =
                                 fileUri.getLastPathSegment();
 
+                        if (displayName == null
+                                || displayName.isEmpty()) {
+
+                            displayName = "File";
+                        }
+
                         String finalType =
                                 messageType;
 
-                        if ("file".equals(messageType)) {
+                        if ("file".equals(
+                                messageType
+                        )) {
+
+                            String uriString =
+                                    fileUri.toString();
 
                             finalType =
-                                    fileUri.toString()
-                                            .contains("image")
+                                    uriString.contains(
+                                            "image"
+                                    )
                                             ? "image"
                                             : "file";
                         }
@@ -1203,37 +1675,44 @@ public class ChatActivity extends BaseActivity {
             return;
         }
 
-        Intent intent =
-                new Intent(
-                        Intent.ACTION_VIEW
-                );
+        try {
 
-        intent.setDataAndType(
-                Uri.parse(fileUrl),
-                getMimeTypeFromUrl(fileUrl)
-        );
+            Intent intent =
+                    new Intent(
+                            Intent.ACTION_VIEW
+                    );
 
-        intent.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK
-        );
+            intent.setDataAndType(
+                    Uri.parse(fileUrl),
+                    getMimeTypeFromUrl(fileUrl)
+            );
 
-        if (intent.resolveActivity(
-                getPackageManager()
-        ) != null) {
+            intent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+            );
 
-            try {
+            if (intent.resolveActivity(
+                    getPackageManager()
+            ) != null) {
 
-                startActivity(
-                        Intent.createChooser(
-                                intent,
-                                "Open with"
-                        )
-                );
+                try {
 
-                return;
+                    startActivity(
+                            Intent.createChooser(
+                                    intent,
+                                    "Open with"
+                            )
+                    );
 
-            } catch (ActivityNotFoundException ignored) {
+                    return;
+
+                } catch (
+                        ActivityNotFoundException ignored
+                ) {
+                }
             }
+
+        } catch (Exception ignored) {
         }
 
         Toast.makeText(
@@ -1244,12 +1723,15 @@ public class ChatActivity extends BaseActivity {
 
         new Thread(() -> {
 
+            HttpURLConnection connection =
+                    null;
+
             try {
 
                 URL url =
                         new URL(fileUrl);
 
-                HttpURLConnection connection =
+                connection =
                         (HttpURLConnection)
                                 url.openConnection();
 
@@ -1283,8 +1765,7 @@ public class ChatActivity extends BaseActivity {
 
                 try (
                         InputStream input =
-                                connection
-                                        .getInputStream();
+                                connection.getInputStream();
 
                         FileOutputStream out =
                                 new FileOutputStream(
@@ -1298,9 +1779,10 @@ public class ChatActivity extends BaseActivity {
                     int bytesRead;
 
                     while (
-                            (bytesRead =
-                                    input.read(buffer))
-                                    != -1
+                            (
+                                    bytesRead =
+                                            input.read(buffer)
+                            ) != -1
                     ) {
 
                         out.write(
@@ -1311,13 +1793,10 @@ public class ChatActivity extends BaseActivity {
                     }
                 }
 
-                connection.disconnect();
-
                 runOnUiThread(
-                        () ->
-                                openLocalFile(
-                                        tempFile
-                                )
+                        () -> openLocalFile(
+                                tempFile
+                        )
                 );
 
             } catch (Exception e) {
@@ -1327,10 +1806,24 @@ public class ChatActivity extends BaseActivity {
                                 Toast.makeText(
                                         this,
                                         "Download failed: "
-                                                + e.getMessage(),
+                                                + (
+                                                e.getMessage() != null
+                                                        ? e.getMessage()
+                                                        : "Unknown error"
+                                        ),
                                         Toast.LENGTH_LONG
                                 ).show()
                 );
+
+            } finally {
+
+                if (connection != null) {
+
+                    try {
+                        connection.disconnect();
+                    } catch (Exception ignored) {
+                    }
+                }
             }
 
         }).start();
@@ -1348,13 +1841,21 @@ public class ChatActivity extends BaseActivity {
                                     url
                             );
 
-            if (ext != null) {
+            if (ext != null
+                    && !ext.isEmpty()) {
 
-                return MimeTypeMap
-                        .getSingleton()
-                        .getMimeTypeFromExtension(
-                                ext.toLowerCase()
-                        );
+                String mimeType =
+                        MimeTypeMap
+                                .getSingleton()
+                                .getMimeTypeFromExtension(
+                                        ext.toLowerCase()
+                                );
+
+                if (mimeType != null
+                        && !mimeType.isEmpty()) {
+
+                    return mimeType;
+                }
             }
 
         } catch (Exception ignored) {
@@ -1403,7 +1904,9 @@ public class ChatActivity extends BaseActivity {
             String mimeType =
                     getMimeType(file);
 
-            if (mimeType == null) {
+            if (mimeType == null
+                    || mimeType.isEmpty()) {
+
                 mimeType = "*/*";
             }
 
@@ -1428,7 +1931,9 @@ public class ChatActivity extends BaseActivity {
                     )
             );
 
-        } catch (ActivityNotFoundException e) {
+        } catch (
+                ActivityNotFoundException e
+        ) {
 
             Toast.makeText(
                     this,
@@ -1450,6 +1955,10 @@ public class ChatActivity extends BaseActivity {
             File file
     ) {
 
+        if (file == null) {
+            return null;
+        }
+
         try {
 
             String ext =
@@ -1458,7 +1967,8 @@ public class ChatActivity extends BaseActivity {
                                     file.getAbsolutePath()
                             );
 
-            if (ext != null) {
+            if (ext != null
+                    && !ext.isEmpty()) {
 
                 return MimeTypeMap
                         .getSingleton()
@@ -1494,7 +2004,9 @@ public class ChatActivity extends BaseActivity {
         if (adapter != null) {
 
             try {
+
                 adapter.stopPlaying();
+
             } catch (Exception ignored) {
             }
         }
@@ -1503,7 +2015,9 @@ public class ChatActivity extends BaseActivity {
                 && isRecordingAudio) {
 
             try {
+
                 audioRecorder.stopRecording();
+
             } catch (Exception ignored) {
             }
         }

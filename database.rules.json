@@ -14,16 +14,17 @@
         "participants": {
           "$uid": {
             ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true",
-
-            ".write": "auth != null && $uid === auth.uid && newData.val() === true"
+            ".write": false
           }
         },
 
         "messages": {
-          "$messageId": {
-            ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true",
+          ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true",
 
-            ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true"
+          "$messageId": {
+            ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.exists() && newData.child('senderId').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('senderId').val() === auth.uid) || (data.exists() && newData.exists() && data.child('senderId').val() === auth.uid) || (data.exists() && newData.exists() && data.child('senderId').val() !== auth.uid && newData.child('id').val() === data.child('id').val() && newData.child('senderId').val() === data.child('senderId').val() && newData.child('text').val() === data.child('text').val() && newData.child('type').val() === data.child('type').val() && newData.child('fileUrl').val() === data.child('fileUrl').val() && newData.child('timestamp').val() === data.child('timestamp').val() && newData.child('voiceDuration').val() === data.child('voiceDuration').val() && newData.child('uploading').val() === data.child('uploading').val() && newData.child('uploadProgress').val() === data.child('uploadProgress').val() && newData.child('fileSize').val() === data.child('fileSize').val() && newData.child('read').val() === true))",
+
+            ".validate": "newData.child('id').isString() && newData.child('id').val() === $messageId && newData.child('senderId').isString() && newData.child('timestamp').isNumber() && newData.child('voiceDuration').isNumber() && newData.child('read').isBoolean() && newData.child('uploading').isBoolean() && newData.child('uploadProgress').isNumber() && (!newData.child('text').exists() || newData.child('text').isString()) && (!newData.child('type').exists() || newData.child('type').isString()) && (!newData.child('fileUrl').exists() || newData.child('fileUrl').isString()) && (!newData.child('fileSize').exists() || newData.child('fileSize').isString()) && (data.exists() ? newData.child('senderId').val() === data.child('senderId').val() : newData.child('senderId').val() === auth.uid)"
           }
         }
       }
