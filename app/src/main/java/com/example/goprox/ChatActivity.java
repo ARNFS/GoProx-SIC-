@@ -245,12 +245,6 @@ public class ChatActivity extends BaseActivity {
                             return;
                         }
 
-                        /*
-                         * Do NOT start the messages listener immediately.
-                         *
-                         * First verify that the backend really created
-                         * the current user as a participant.
-                         */
                         verifyParticipantCreated();
 
                     })
@@ -1432,9 +1426,19 @@ public class ChatActivity extends BaseActivity {
 
                     msg.setRead(true);
 
+                    /*
+                     * IMPORTANT:
+                     * ChatMessage serializes isRead() as "read".
+                     *
+                     * Therefore the Firebase field must be:
+                     * /messages/{messageId}/read
+                     *
+                     * NOT:
+                     * /messages/{messageId}/isRead
+                     */
                     chatRef
                             .child(msg.getId())
-                            .child("isRead")
+                            .child("read")
                             .setValue(true);
                 }
             }
