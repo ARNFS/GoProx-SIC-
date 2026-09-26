@@ -324,7 +324,7 @@ public class ChatActivity extends BaseActivity {
         Log.d(
                 TAG,
                 "Checking participant created at: "
-                        + participantRef.toString()
+                        + participantRef
         );
 
         participantRef
@@ -358,6 +358,12 @@ public class ChatActivity extends BaseActivity {
                                     );
 
                                     setupFirebase();
+
+                                    /*
+                                     * This still resets unreadCount.
+                                     * Actual message read-state is handled
+                                     * when messages arrive from Firebase.
+                                     */
                                     markMessagesAsRead();
 
                                 } else {
@@ -526,7 +532,6 @@ public class ChatActivity extends BaseActivity {
                                 return true;
 
                             case MotionEvent.ACTION_UP:
-
                             case MotionEvent.ACTION_CANCEL:
 
                                 stopVoiceRecordingAndSend();
@@ -1122,6 +1127,24 @@ public class ChatActivity extends BaseActivity {
                                             messageList.size() - 1
                                     );
                                 }
+
+                                /*
+                                 * FIX:
+                                 * markMessagesAsRead() can run before
+                                 * Firebase has delivered messages into
+                                 * messageList.
+                                 *
+                                 * Therefore each incoming unread message
+                                 * is marked as read here, immediately
+                                 * after it is received.
+                                 */
+                                if (msg.getSenderId() != null
+                                        && !msg.getSenderId().equals(currentUserId)
+                                        && !msg.isRead()
+                                        && msg.getId() != null) {
+
+                                    markSingleMessageAsRead(msg);
+                                }
                             }
                         }
 
@@ -1130,6 +1153,45 @@ public class ChatActivity extends BaseActivity {
                                 @NonNull DataSnapshot snapshot,
                                 String previousChildName
                         ) {
+
+                            /*
+                             * Keep local model synchronized with Firebase.
+                             */
+                            ChatMessage updatedMsg =
+                                    snapshot.getValue(
+                                            ChatMessage.class
+                                    );
+
+                            if (updatedMsg == null
+                                    || updatedMsg.getId() == null) {
+
+                                return;
+                            }
+
+                            for (int i = 0;
+                                 i < messageList.size();
+                                 i++) {
+
+                                ChatMessage localMsg =
+                                        messageList.get(i);
+
+                                if (localMsg != null
+                                        && updatedMsg.getId().equals(
+                                        localMsg.getId()
+                                )) {
+
+                                    localMsg.setRead(
+                                            updatedMsg.isRead()
+                                    );
+
+                                    if (adapter != null) {
+
+                                        adapter.notifyItemChanged(i);
+                                    }
+
+                                    break;
+                                }
+                            }
                         }
 
                         @Override
@@ -1183,6 +1245,45 @@ public class ChatActivity extends BaseActivity {
                     Toast.LENGTH_SHORT
             ).show();
         }
+    }
+
+    private void markSingleMessageAsRead(
+            @NonNull ChatMessage msg
+    ) {
+
+        if (chatRef == null
+                || msg.getId() == null
+                || currentUserId == null
+                || msg.getSenderId() == null
+                || msg.getSenderId().equals(currentUserId)
+                || msg.isRead()) {
+
+            return;
+        }
+
+        msg.setRead(true);
+
+        chatRef
+                .child(msg.getId())
+                .child("read")
+                .setValue(true)
+                .addOnFailureListener(
+                        error -> {
+
+                            /*
+                             * If the server rejects the write,
+                             * restore local state so UI does not
+                             * falsely claim it was read.
+                             */
+                            msg.setRead(false);
+
+                            Log.e(
+                                    TAG,
+                                    "Failed to mark message as read",
+                                    error
+                            );
+                        }
+                );
     }
 
     private void sendTextMessage() {
@@ -1424,22 +1525,7 @@ public class ChatActivity extends BaseActivity {
                         && chatRef != null
                         && msg.getId() != null) {
 
-                    msg.setRead(true);
-
-                    /*
-                     * IMPORTANT:
-                     * ChatMessage serializes isRead() as "read".
-                     *
-                     * Therefore the Firebase field must be:
-                     * /messages/{messageId}/read
-                     *
-                     * NOT:
-                     * /messages/{messageId}/isRead
-                     */
-                    chatRef
-                            .child(msg.getId())
-                            .child("read")
-                            .setValue(true);
+                    markSingleMessageAsRead(msg);
                 }
             }
 

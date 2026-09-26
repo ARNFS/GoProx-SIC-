@@ -41,41 +41,91 @@ public class CallHelper {
                 : otherUserId + "_" + currentUserId;
 
         String myName = auth.getCurrentUser().getDisplayName();
-        if (myName == null) myName = "User";
+        if (myName == null || myName.trim().isEmpty()) {
+            myName = "User";
+        }
 
-        String finalServiceTitle = (serviceTitle != null && !serviceTitle.isEmpty()) ? serviceTitle : "";
+        String finalServiceTitle =
+                (serviceTitle != null && !serviceTitle.isEmpty())
+                        ? serviceTitle
+                        : "";
 
+        /*
+         * Document stored at /calls/{calleeUid}
+         *
+         * This is the incoming-call document.
+         */
         Map<String, Object> callData = new HashMap<>();
         callData.put("callId", channelName);
         callData.put("callerId", currentUserId);
+        callData.put("calleeId", otherUserId);
         callData.put("callerName", myName);
         callData.put("callerPhotoUrl", "");
         callData.put("channelName", channelName);
         callData.put("serviceTitle", finalServiceTitle);
         callData.put("status", "ringing");
 
+        /*
+         * Document stored at /calls/{callerUid}
+         *
+         * This is the caller's own call-state document.
+         */
         Map<String, Object> selfData = new HashMap<>();
         selfData.put("callId", channelName);
+        selfData.put("callerId", currentUserId);
+        selfData.put("calleeId", otherUserId);
         selfData.put("otherUserId", otherUserId);
         selfData.put("channelName", channelName);
-        selfData.put("status", "calling"); // 🔥 "calling", ՈՉ "ringing"
+        selfData.put("status", "calling");
 
-        db.collection("calls").document(otherUserId).set(callData);
-        db.collection("calls").document(currentUserId)
+        db.collection("calls")
+                .document(otherUserId)
+                .set(callData)
+                .addOnFailureListener(e -> {
+                    CallManager.getInstance().setInCall(false);
+                    CallManager.getInstance().resumeListening();
+                    Toast.makeText(
+                            activity,
+                            "Failed to start call",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                });
+
+        db.collection("calls")
+                .document(currentUserId)
                 .set(selfData)
                 .addOnSuccessListener(v -> {
-                    Intent intent = new Intent(activity, OutgoingCallActivity.class);
+                    Intent intent =
+                            new Intent(activity, OutgoingCallActivity.class);
+
                     intent.putExtra("channelName", channelName);
                     intent.putExtra("currentUid", currentUserId);
                     intent.putExtra("otherUserId", otherUserId);
-                    intent.putExtra("remoteUserName", otherUserName != null ? otherUserName : "User");
+                    intent.putExtra(
+                            "remoteUserName",
+                            otherUserName != null ? otherUserName : "User"
+                    );
                     intent.putExtra("serviceTitle", finalServiceTitle);
+
                     activity.startActivity(intent);
                 })
                 .addOnFailureListener(e -> {
                     CallManager.getInstance().setInCall(false);
                     CallManager.getInstance().resumeListening();
-                    Toast.makeText(activity, "Failed to start call", Toast.LENGTH_SHORT).show();
+
+                    /*
+                     * Clean up the incoming-call document because
+                     * creating the caller-state document failed.
+                     */
+                    db.collection("calls")
+                            .document(otherUserId)
+                            .delete();
+
+                    Toast.makeText(
+                            activity,
+                            "Failed to start call",
+                            Toast.LENGTH_SHORT
+                    ).show();
                 });
     }
 }
