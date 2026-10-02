@@ -18,23 +18,20 @@ import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageMetadata;
 import com.google.firebase.storage.StorageReference;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -58,7 +55,8 @@ public class AddPostActivity extends BaseActivity {
 
     private static final int MAX_PRICE = 99999;
 
-    private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
+    private static final long MAX_IMAGE_SIZE_BYTES =
+            5L * 1024L * 1024L;
 
     private static final List<String> FORBIDDEN_WORDS = Arrays.asList(
             "sex",
@@ -78,10 +76,11 @@ public class AddPostActivity extends BaseActivity {
     );
 
     private static final List<String> STOP_WORDS = Arrays.asList(
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-            "of", "with", "by", "from", "as", "is", "was", "are", "am", "be",
-            "been", "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "shall", "should", "can", "could", "may", "might", "must"
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
+            "for", "of", "with", "by", "from", "as", "is", "was", "are",
+            "am", "be", "been", "being", "have", "has", "had", "do", "does",
+            "did", "will", "would", "shall", "should", "can", "could",
+            "may", "might", "must"
     );
 
     private static final Set<String> ALLOWED_IMAGE_MIME_TYPES =
@@ -92,15 +91,6 @@ public class AddPostActivity extends BaseActivity {
                     "image/webp"
             ));
 
-    /*
-     * Allows:
-     * Armenian
-     * Russian
-     * English
-     * numbers
-     * spaces
-     * common service-related punctuation
-     */
     private static final Pattern SERVICE_TEXT_PATTERN =
             Pattern.compile(
                     "^[\\p{L}\\p{N}\\s.,!?()&+/#'’\\-:]+$",
@@ -156,6 +146,7 @@ public class AddPostActivity extends BaseActivity {
         setupInputFilters();
         setupListeners();
         setupBottomNavigation();
+        setupBackHandling();
 
         checkEditMode();
     }
@@ -313,31 +304,41 @@ public class AddPostActivity extends BaseActivity {
 
         etName.setFilters(
                 new InputFilter[]{
-                        new InputFilter.LengthFilter(MAX_NAME_LENGTH)
+                        new InputFilter.LengthFilter(
+                                MAX_NAME_LENGTH
+                        )
                 }
         );
 
         etProfession.setFilters(
                 new InputFilter[]{
-                        new InputFilter.LengthFilter(MAX_PROFESSION_LENGTH)
+                        new InputFilter.LengthFilter(
+                                MAX_PROFESSION_LENGTH
+                        )
                 }
         );
 
         etDescription.setFilters(
                 new InputFilter[]{
-                        new InputFilter.LengthFilter(MAX_DESCRIPTION_LENGTH)
+                        new InputFilter.LengthFilter(
+                                MAX_DESCRIPTION_LENGTH
+                        )
                 }
         );
 
         etCountry.setFilters(
                 new InputFilter[]{
-                        new InputFilter.LengthFilter(MAX_COUNTRY_LENGTH)
+                        new InputFilter.LengthFilter(
+                                MAX_COUNTRY_LENGTH
+                        )
                 }
         );
 
         etCity.setFilters(
                 new InputFilter[]{
-                        new InputFilter.LengthFilter(MAX_CITY_LENGTH)
+                        new InputFilter.LengthFilter(
+                                MAX_CITY_LENGTH
+                        )
                 }
         );
 
@@ -357,6 +358,46 @@ public class AddPostActivity extends BaseActivity {
         btnSubmit.setOnClickListener(
                 v -> addService()
         );
+    }
+
+    private void setupBackHandling() {
+
+        getOnBackPressedDispatcher().addCallback(
+                this,
+                new OnBackPressedCallback(true) {
+
+                    @Override
+                    public void handleOnBackPressed() {
+
+                        handleBackNavigation();
+                    }
+                }
+        );
+    }
+
+    private void handleBackNavigation() {
+
+        if (isSubmitting) {
+
+            new AlertDialog.Builder(this)
+                    .setTitle("Upload in progress")
+                    .setMessage(
+                            "The service is being saved. Are you sure you want to leave?"
+                    )
+                    .setNegativeButton(
+                            "Stay",
+                            null
+                    )
+                    .setPositiveButton(
+                            "Leave",
+                            (dialog, which) -> finish()
+                    )
+                    .show();
+
+            return;
+        }
+
+        finish();
     }
 
     private void checkEditMode() {
@@ -779,26 +820,46 @@ public class AddPostActivity extends BaseActivity {
     ) {
 
         if (name.isEmpty()) {
-            return "Please enter a service name";
+            return "Name is required";
         }
 
         if (profession.isEmpty()) {
-            return "Please enter a profession";
+            return "Profession is required";
         }
 
         if (description.isEmpty()) {
-            return "Please enter a description";
+            return "Description is required";
         }
 
-        if (!isValidServiceText(name)) {
-            return "Service name contains unsupported characters";
+        if (name.length() > MAX_NAME_LENGTH) {
+            return "Name is too long";
         }
 
-        if (!isValidServiceText(profession)) {
+        if (profession.length() > MAX_PROFESSION_LENGTH) {
+            return "Profession is too long";
+        }
+
+        if (description.length() > MAX_DESCRIPTION_LENGTH) {
+            return "Description is too long";
+        }
+
+        if (country.length() > MAX_COUNTRY_LENGTH) {
+            return "Country is too long";
+        }
+
+        if (city.length() > MAX_CITY_LENGTH) {
+            return "City is too long";
+        }
+
+        if (!SERVICE_TEXT_PATTERN.matcher(name).matches()) {
+            return "Name contains unsupported characters";
+        }
+
+        if (!SERVICE_TEXT_PATTERN.matcher(profession).matches()) {
             return "Profession contains unsupported characters";
         }
 
-        if (!isValidServiceText(description)) {
+        if (!SERVICE_TEXT_PATTERN.matcher(description).matches()) {
             return "Description contains unsupported characters";
         }
 
@@ -818,28 +879,24 @@ public class AddPostActivity extends BaseActivity {
                 containsForbiddenWord(profession) ||
                 containsForbiddenWord(description)) {
 
-            return "Please avoid inappropriate words";
-        }
-
-        if (!priceType.equals("Depends on problem") &&
-                priceNumber.isEmpty()) {
-
-            return "Please enter a price";
+            return "Please remove inappropriate words";
         }
 
         if (!priceType.equals("Depends on problem")) {
+
+            if (priceNumber.isEmpty()) {
+                return "Price is required";
+            }
 
             try {
 
                 int price =
                         Integer.parseInt(priceNumber);
 
-                if (price <= 0) {
-                    return "Price must be greater than 0";
-                }
+                if (price < 0 ||
+                        price > MAX_PRICE) {
 
-                if (price > MAX_PRICE) {
-                    return "Price is too high";
+                    return "Price must be between 0 and 99999";
                 }
 
             } catch (NumberFormatException e) {
@@ -851,19 +908,6 @@ public class AddPostActivity extends BaseActivity {
         return null;
     }
 
-    private boolean isValidServiceText(String text) {
-
-        if (text == null ||
-                text.trim().isEmpty()) {
-
-            return false;
-        }
-
-        return SERVICE_TEXT_PATTERN
-                .matcher(text)
-                .matches();
-    }
-
     private String buildFormattedPrice(
             String priceNumber,
             String priceType
@@ -873,39 +917,37 @@ public class AddPostActivity extends BaseActivity {
             return "Depends on problem";
         }
 
+        if (priceNumber == null ||
+                priceNumber.trim().isEmpty()) {
+
+            return null;
+        }
+
         try {
 
             int price =
                     Integer.parseInt(priceNumber);
 
-            if (price <= 0 ||
+            if (price < 0 ||
                     price > MAX_PRICE) {
-
-                Toast.makeText(
-                        this,
-                        "Invalid price",
-                        Toast.LENGTH_SHORT
-                ).show();
 
                 return null;
             }
 
-            if (priceType.equals("Fixed")) {
+            if (priceType.equals("$/hour")) {
 
-                return price + "$";
+                return "$" + price + "/hour";
+
+            } else if (priceType.equals("Fixed")) {
+
+                return "$" + price;
 
             } else {
 
-                return price + "$/hour";
+                return "$" + price;
             }
 
         } catch (NumberFormatException e) {
-
-            Toast.makeText(
-                    this,
-                    "Invalid price",
-                    Toast.LENGTH_SHORT
-            ).show();
 
             return null;
         }
@@ -1168,17 +1210,6 @@ public class AddPostActivity extends BaseActivity {
         if (isEditMode &&
                 editServiceId != null) {
 
-            /*
-             * EDIT:
-             *
-             * Never overwrite:
-             * - rating
-             * - ratingCount
-             * - createdAt
-             *
-             * These belong to the service's existing lifecycle.
-             */
-
             service.put(
                     "updatedAt",
                     FieldValue.serverTimestamp()
@@ -1197,7 +1228,6 @@ public class AddPostActivity extends BaseActivity {
                                 ).show();
 
                                 navigateHome();
-
                             }
                     )
                     .addOnFailureListener(
@@ -1208,12 +1238,6 @@ public class AddPostActivity extends BaseActivity {
                     );
 
         } else {
-
-            /*
-             * CREATE:
-             *
-             * Initialize rating fields exactly once.
-             */
 
             service.put(
                     "rating",
@@ -1242,7 +1266,6 @@ public class AddPostActivity extends BaseActivity {
                                 ).show();
 
                                 navigateHome();
-
                             }
                     )
                     .addOnFailureListener(
@@ -1304,8 +1327,8 @@ public class AddPostActivity extends BaseActivity {
             );
 
         } else if (
-                normalizedProfession.contains("ios")
-                        || normalizedProfession.contains("swift")
+                normalizedProfession.contains("ios") ||
+                        normalizedProfession.contains("swift")
         ) {
 
             uniqueTags.addAll(
@@ -1357,8 +1380,8 @@ public class AddPostActivity extends BaseActivity {
             );
 
         } else if (
-                normalizedProfession.contains("developer")
-                        || normalizedProfession.contains("programmer")
+                normalizedProfession.contains("developer") ||
+                        normalizedProfession.contains("programmer")
         ) {
 
             uniqueTags.addAll(
@@ -1600,35 +1623,9 @@ public class AddPostActivity extends BaseActivity {
     @Override
     public boolean onSupportNavigateUp() {
 
-        onBackPressed();
+        getOnBackPressedDispatcher()
+                .onBackPressed();
 
         return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-
-        if (isSubmitting) {
-
-            new AlertDialog.Builder(this)
-                    .setTitle("Upload in progress")
-                    .setMessage(
-                            "The service is being saved. Are you sure you want to leave?"
-                    )
-                    .setNegativeButton(
-                            "Stay",
-                            null
-                    )
-                    .setPositiveButton(
-                            "Leave",
-                            (dialog, which) ->
-                                    super.onBackPressed()
-                    )
-                    .show();
-
-            return;
-        }
-
-        super.onBackPressed();
     }
 }
