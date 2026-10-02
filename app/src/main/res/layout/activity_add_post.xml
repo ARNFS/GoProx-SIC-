@@ -1,135 +1,492 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/white">
+    android:background="@color/background">
 
-    <androidx.appcompat.widget.Toolbar
+    <!-- =========================
+         TOP APP BAR
+         ========================= -->
+
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/red"
+        android:background="@color/primary"
+        android:elevation="4dp"
         app:title="Add Service"
-        app:titleTextColor="@android:color/white"
-        android:elevation="4dp" />
+        app:titleTextColor="@color/white"
+        app:navigationIconTint="@color/white" />
 
-    <ScrollView
+    <!-- =========================
+         MAIN CONTENT
+         ========================= -->
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize"
+        android:layout_marginBottom="80dp"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:paddingBottom="24dp"
+        android:scrollbars="vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingTop="20dp"
+            android:paddingEnd="16dp">
 
-            <ImageView
-                android:id="@+id/ivServiceImage"
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_profile_placeholder"
-                android:scaleType="centerCrop"
-                android:layout_marginBottom="16dp" />
+            <!-- =========================
+                 HEADER
+                 ========================= -->
 
-            <Button
-                android:id="@+id/btnSelectImage"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="Select Image"
-                android:layout_marginBottom="16dp" />
-
-            <EditText
-                android:id="@+id/etName"
+            <TextView
+                android:id="@+id/tvPageTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Name"
-                android:inputType="text"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="12dp" />
+                android:text="Create your service"
+                android:textColor="@color/black"
+                android:textSize="24sp"
+                android:textStyle="bold" />
 
-            <EditText
-                android:id="@+id/etProfession"
+            <TextView
+                android:id="@+id/tvPageSubtitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Profession"
-                android:inputType="text"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="20dp"
+                android:text="Tell people what you offer and how they can work with you."
+                android:textColor="@color/dark_gray"
+                android:textSize="14sp"
+                android:lineSpacingExtra="2dp" />
 
-            <EditText
-                android:id="@+id/etDescription"
+            <!-- =========================
+                 SERVICE IMAGE
+                 ========================= -->
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/serviceImageCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardBackgroundColor="@color/surface"
+                app:cardCornerRadius="18dp"
+                app:cardElevation="1dp"
+                app:strokeColor="@color/light_gray"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:id="@+id/tvImageSectionTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Service image"
+                        android:textColor="@color/black"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvImageSectionSubtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Add a clear image that represents your service."
+                        android:textColor="@color/dark_gray"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="148dp"
+                        android:layout_height="148dp"
+                        android:layout_marginTop="16dp"
+                        android:contentDescription="Service image preview"
+                        app:cardBackgroundColor="@color/background"
+                        app:cardCornerRadius="18dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="@color/light_gray"
+                        app:strokeWidth="1dp">
+
+                        <ImageView
+                            android:id="@+id/ivServiceImage"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="Selected service image"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/ic_profile_placeholder" />
+
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSelectImage"
+                        style="@style/OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:minHeight="48dp"
+                        android:text="Select Image"
+                        android:textAllCaps="false"
+                        app:iconGravity="textStart"
+                        app:iconPadding="8dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- =========================
+                 BASIC INFORMATION
+                 ========================= -->
+
+            <TextView
+                android:id="@+id/tvBasicInfoTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Basic information"
+                android:textColor="@color/black"
+                android:textSize="19sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvBasicInfoSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="14dp"
+                android:text="Give your service a clear name and profession."
+                android:textColor="@color/dark_gray"
+                android:textSize="13sp" />
+
+            <!-- Name -->
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/nameInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Service name"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidthFocused="2dp"
+                app:counterEnabled="true"
+                app:counterMaxLength="50"
+                app:helperText="Use a short, recognizable name"
+                app:startIconContentDescription="Service name">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionNext"
+                    android:inputType="textCapSentences"
+                    android:maxLines="1"
+                    android:minHeight="56dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Profession -->
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/professionInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:hint="Profession / category"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidthFocused="2dp"
+                app:counterEnabled="true"
+                app:counterMaxLength="50"
+                app:helperText="Example: Android developer, electrician, plumber">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etProfession"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionNext"
+                    android:inputType="textCapSentences"
+                    android:maxLines="1"
+                    android:minHeight="56dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Description -->
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/descriptionInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
                 android:hint="Description"
-                android:inputType="textMultiLine"
-                android:minLines="3"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="12dp" />
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidthFocused="2dp"
+                app:counterEnabled="true"
+                app:counterMaxLength="500"
+                app:helperText="Explain what you provide and what customers can expect">
 
-            <!-- Price Type Dropdown + Price Input -->
-            <LinearLayout
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etDescription"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top|start"
+                    android:imeOptions="actionNext"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:maxLines="8"
+                    android:minHeight="120dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- =========================
+                 PRICING
+                 ========================= -->
+
+            <TextView
+                android:id="@+id/tvPricingTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="12dp">
+                android:layout_marginTop="28dp"
+                android:text="Pricing"
+                android:textColor="@color/black"
+                android:textSize="19sp"
+                android:textStyle="bold" />
 
-                <EditText
-                    android:id="@+id/etPrice"
-                    android:layout_width="0dp"
+            <TextView
+                android:id="@+id/tvPricingSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="14dp"
+                android:text="Choose how customers should understand your price."
+                android:textColor="@color/dark_gray"
+                android:textSize="13sp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/pricingCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/surface"
+                app:cardCornerRadius="14dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/light_gray"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Price"
-                    android:inputType="number"
-                    android:padding="12dp"
-                    android:background="@drawable/bg_message_input" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="12dp">
 
-                <Spinner
-                    android:id="@+id/spinnerPriceType"
-                    android:layout_width="130dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_message_input"
-                    android:padding="12dp" />
-            </LinearLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/priceInputLayout"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Price"
+                        app:boxCornerRadiusBottomEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp"
+                        app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusTopStart="12dp"
+                        app:boxStrokeColor="@color/primary"
+                        app:boxStrokeWidthFocused="2dp">
 
-            <EditText
-                android:id="@+id/etCountry"
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etPrice"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:imeOptions="actionNext"
+                            android:inputType="number"
+                            android:maxLength="5"
+                            android:minHeight="56dp"
+                            android:paddingTop="8dp"
+                            android:paddingBottom="8dp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Spinner
+                        android:id="@+id/spinnerPriceType"
+                        android:layout_width="140dp"
+                        android:layout_height="56dp"
+                        android:layout_marginStart="10dp"
+                        android:background="@drawable/bg_message_input"
+                        android:contentDescription="Price type"
+                        android:gravity="center_vertical"
+                        android:minHeight="48dp"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- =========================
+                 LOCATION
+                 ========================= -->
+
+            <TextView
+                android:id="@+id/tvLocationTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:text="Location"
+                android:textColor="@color/black"
+                android:textSize="19sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvLocationSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="14dp"
+                android:text="Help customers find services available in their area."
+                android:textColor="@color/dark_gray"
+                android:textSize="13sp" />
+
+            <!-- Country -->
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/countryInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Country"
-                android:inputType="text"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="12dp" />
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidthFocused="2dp">
 
-            <EditText
-                android:id="@+id/etCity"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etCountry"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionNext"
+                    android:inputType="textCapWords"
+                    android:maxLength="60"
+                    android:maxLines="1"
+                    android:minHeight="56dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- City -->
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/cityInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
                 android:hint="City"
-                android:inputType="text"
-                android:padding="12dp"
-                android:background="@drawable/bg_message_input"
-                android:layout_marginBottom="24dp" />
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidthFocused="2dp">
 
-            <Button
-                android:id="@+id/btnSubmit"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etCity"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionDone"
+                    android:inputType="textCapWords"
+                    android:maxLength="60"
+                    android:maxLines="1"
+                    android:minHeight="56dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- =========================
+                 PUBLISH CTA
+                 ========================= -->
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/submitCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Add Service"
-                android:backgroundTint="@color/primary" />
+                android:layout_marginTop="28dp"
+                app:cardBackgroundColor="@color/surface"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/light_gray"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:id="@+id/tvSubmitHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Review your information before publishing your service."
+                        android:textColor="@color/dark_gray"
+                        android:textSize="13sp"
+                        android:lineSpacingExtra="2dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSubmit"
+                        style="@style/PrimaryButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="12dp"
+                        android:minHeight="48dp"
+                        android:text="Add Service"
+                        android:textAllCaps="false"
+                        android:textSize="16sp"
+                        app:cornerRadius="12dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
-    </ScrollView>
+
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- =========================
+         BOTTOM NAVIGATION
+         ========================= -->
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNavigation"
@@ -137,7 +494,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="@color/white"
-        app:elevation="8dp"
+        android:elevation="10dp"
+        app:elevation="10dp"
+        app:itemHorizontalTranslationEnabled="false"
+        app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_navigation_menu" />
 
-</LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
