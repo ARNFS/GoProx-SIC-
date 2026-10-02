@@ -8,8 +8,8 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.text.InputFilter;
 import android.text.InputType;
-import android.webkit.MimeTypeMap;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -26,6 +26,7 @@ import androidx.appcompat.widget.Toolbar;
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.storage.FirebaseStorage;
@@ -139,8 +140,15 @@ public class AddPostActivity extends BaseActivity {
 
         setContentView(R.layout.activity_add_post);
 
-        initializeViews();
-        initializeFirebase();
+        if (!initializeViews()) {
+            showFatalInitializationError();
+            return;
+        }
+
+        if (!initializeFirebase()) {
+            return;
+        }
+
         setupToolbar();
         setupPriceSpinner();
         setupInputFilters();
@@ -151,63 +159,120 @@ public class AddPostActivity extends BaseActivity {
         checkEditMode();
     }
 
-    private void initializeViews() {
+    private boolean initializeViews() {
 
-        etName = findViewById(R.id.etName);
-        etProfession = findViewById(R.id.etProfession);
-        etDescription = findViewById(R.id.etDescription);
-        etPrice = findViewById(R.id.etPrice);
+        try {
+            etName = findViewById(R.id.etName);
+            etProfession = findViewById(R.id.etProfession);
+            etDescription = findViewById(R.id.etDescription);
+            etPrice = findViewById(R.id.etPrice);
 
-        etCountry = findViewById(R.id.etCountry);
-        etCity = findViewById(R.id.etCity);
+            etCountry = findViewById(R.id.etCountry);
+            etCity = findViewById(R.id.etCity);
 
-        spinnerPriceType = findViewById(R.id.spinnerPriceType);
+            spinnerPriceType = findViewById(R.id.spinnerPriceType);
 
-        btnSubmit = findViewById(R.id.btnSubmit);
-        btnSelectImage = findViewById(R.id.btnSelectImage);
+            btnSubmit = findViewById(R.id.btnSubmit);
+            btnSelectImage = findViewById(R.id.btnSelectImage);
 
-        ivServiceImage = findViewById(R.id.ivServiceImage);
+            ivServiceImage = findViewById(R.id.ivServiceImage);
 
-        bottomNavigationView = findViewById(R.id.bottomNavigation);
+            bottomNavigationView = findViewById(R.id.bottomNavigation);
+
+            return etName != null
+                    && etProfession != null
+                    && etDescription != null
+                    && etPrice != null
+                    && etCountry != null
+                    && etCity != null
+                    && spinnerPriceType != null
+                    && btnSubmit != null
+                    && btnSelectImage != null
+                    && ivServiceImage != null
+                    && bottomNavigationView != null;
+
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    private void initializeFirebase() {
+    private boolean initializeFirebase() {
 
-        db = FirebaseFirestore.getInstance();
-        storage = FirebaseStorage.getInstance();
-        storageRef = storage.getReference();
+        try {
+            db = FirebaseFirestore.getInstance();
+            storage = FirebaseStorage.getInstance();
+            storageRef = FirebaseStorage.getInstance().getReference();
 
-        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            FirebaseUser currentUser =
+                    FirebaseAuth.getInstance().getCurrentUser();
+
+            if (currentUser == null) {
+
+                Toast.makeText(
+                        this,
+                        "Please sign in first",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                finish();
+                return false;
+            }
+
+            userId = currentUser.getUid();
+
+            if (userId == null || userId.trim().isEmpty()) {
+
+                Toast.makeText(
+                        this,
+                        "Authentication error",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                finish();
+                return false;
+            }
+
+            return true;
+
+        } catch (Exception e) {
 
             Toast.makeText(
                     this,
-                    "Please sign in first",
-                    Toast.LENGTH_SHORT
+                    "Could not initialize Firebase",
+                    Toast.LENGTH_LONG
             ).show();
 
             finish();
-            return;
+            return false;
         }
-
-        userId = FirebaseAuth
-                .getInstance()
-                .getCurrentUser()
-                .getUid();
     }
 
     private void setupToolbar() {
 
-        Toolbar toolbar = findViewById(R.id.toolbar);
+        try {
 
-        setSupportActionBar(toolbar);
+            Toolbar toolbar = findViewById(R.id.toolbar);
 
-        if (getSupportActionBar() != null) {
+            if (toolbar == null) {
+                return;
+            }
 
-            getSupportActionBar()
-                    .setDisplayHomeAsUpEnabled(true);
+            setSupportActionBar(toolbar);
 
-            getSupportActionBar()
-                    .setTitle("Add Service");
+            if (getSupportActionBar() != null) {
+
+                getSupportActionBar()
+                        .setDisplayHomeAsUpEnabled(true);
+
+                getSupportActionBar()
+                        .setTitle(
+                                isEditMode
+                                        ? "Edit Service"
+                                        : "Add Service"
+                        );
+            }
+
+        } catch (Exception ignored) {
         }
     }
 
@@ -243,12 +308,20 @@ public class AddPostActivity extends BaseActivity {
                             long id
                     ) {
 
-                        String selected =
-                                String.valueOf(
-                                        parent.getItemAtPosition(position)
-                                );
+                        if (parent == null ||
+                                etPrice == null) {
+                            return;
+                        }
 
-                        if (selected.equals("Depends on problem")) {
+                        Object selectedObject =
+                                parent.getItemAtPosition(position);
+
+                        String selected =
+                                selectedObject == null
+                                        ? ""
+                                        : selectedObject.toString();
+
+                        if ("Depends on problem".equals(selected)) {
 
                             etPrice.setEnabled(false);
                             etPrice.setText("");
@@ -273,29 +346,29 @@ public class AddPostActivity extends BaseActivity {
     private void setupInputFilters() {
 
         etName.setInputType(
-                InputType.TYPE_CLASS_TEXT |
-                        InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         );
 
         etProfession.setInputType(
-                InputType.TYPE_CLASS_TEXT |
-                        InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         );
 
         etDescription.setInputType(
-                InputType.TYPE_CLASS_TEXT |
-                        InputType.TYPE_TEXT_FLAG_CAP_SENTENCES |
-                        InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
         );
 
         etCountry.setInputType(
-                InputType.TYPE_CLASS_TEXT |
-                        InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_WORDS
         );
 
         etCity.setInputType(
-                InputType.TYPE_CLASS_TEXT |
-                        InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_WORDS
         );
 
         etPrice.setInputType(
@@ -377,6 +450,10 @@ public class AddPostActivity extends BaseActivity {
 
     private void handleBackNavigation() {
 
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+
         if (isSubmitting) {
 
             new AlertDialog.Builder(this)
@@ -407,6 +484,7 @@ public class AddPostActivity extends BaseActivity {
         if (intent == null ||
                 !intent.hasExtra("serviceId")) {
 
+            updateToolbarTitle();
             return;
         }
 
@@ -428,13 +506,11 @@ public class AddPostActivity extends BaseActivity {
 
         isEditMode = true;
 
-        if (getSupportActionBar() != null) {
+        updateToolbarTitle();
 
-            getSupportActionBar()
-                    .setTitle("Edit Service");
+        if (btnSubmit != null) {
+            btnSubmit.setText("Update Service");
         }
-
-        btnSubmit.setText("Update Service");
 
         String name =
                 intent.getStringExtra("name");
@@ -482,15 +558,33 @@ public class AddPostActivity extends BaseActivity {
         if (existingImageUrl != null &&
                 !existingImageUrl.trim().isEmpty()) {
 
-            Glide.with(this)
-                    .load(existingImageUrl)
-                    .placeholder(
-                            R.drawable.ic_profile_placeholder
-                    )
-                    .error(
-                            R.drawable.ic_profile_placeholder
-                    )
-                    .into(ivServiceImage);
+            try {
+
+                Glide.with(this)
+                        .load(existingImageUrl)
+                        .placeholder(
+                                R.drawable.ic_profile_placeholder
+                        )
+                        .error(
+                                R.drawable.ic_profile_placeholder
+                        )
+                        .into(ivServiceImage);
+
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void updateToolbarTitle() {
+
+        if (getSupportActionBar() != null) {
+
+            getSupportActionBar()
+                    .setTitle(
+                            isEditMode
+                                    ? "Edit Service"
+                                    : "Add Service"
+                    );
         }
     }
 
@@ -532,19 +626,30 @@ public class AddPostActivity extends BaseActivity {
 
     private void openFileChooser() {
 
-        Intent intent =
-                new Intent(Intent.ACTION_GET_CONTENT);
+        try {
 
-        intent.setType("image/*");
+            Intent intent =
+                    new Intent(Intent.ACTION_GET_CONTENT);
 
-        intent.addCategory(
-                Intent.CATEGORY_OPENABLE
-        );
+            intent.setType("image/*");
 
-        startActivityForResult(
-                intent,
-                PICK_IMAGE_REQUEST
-        );
+            intent.addCategory(
+                    Intent.CATEGORY_OPENABLE
+            );
+
+            startActivityForResult(
+                    intent,
+                    PICK_IMAGE_REQUEST
+            );
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Could not open image picker",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
     @Override
@@ -577,9 +682,20 @@ public class AddPostActivity extends BaseActivity {
 
         imageUri = selectedUri;
 
-        ivServiceImage.setImageURI(
-                imageUri
-        );
+        try {
+
+            ivServiceImage.setImageURI(
+                    imageUri
+            );
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Could not preview image",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
     private boolean isValidImage(Uri uri) {
@@ -716,10 +832,13 @@ public class AddPostActivity extends BaseActivity {
         String priceNumber =
                 etPrice.getText().toString().trim();
 
+        Object selectedPriceType =
+                spinnerPriceType.getSelectedItem();
+
         String priceType =
-                spinnerPriceType
-                        .getSelectedItem()
-                        .toString();
+                selectedPriceType == null
+                        ? ""
+                        : selectedPriceType.toString();
 
         String country =
                 normalizeLocation(
@@ -760,10 +879,15 @@ public class AddPostActivity extends BaseActivity {
                 );
 
         if (priceFormatted == null) {
+
+            Toast.makeText(
+                    this,
+                    "Invalid price",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             return;
         }
-
-        isSubmitting = true;
 
         setSubmittingState(true);
 
@@ -882,7 +1006,7 @@ public class AddPostActivity extends BaseActivity {
             return "Please remove inappropriate words";
         }
 
-        if (!priceType.equals("Depends on problem")) {
+        if (!"Depends on problem".equals(priceType)) {
 
             if (priceNumber.isEmpty()) {
                 return "Price is required";
@@ -913,7 +1037,7 @@ public class AddPostActivity extends BaseActivity {
             String priceType
     ) {
 
-        if (priceType.equals("Depends on problem")) {
+        if ("Depends on problem".equals(priceType)) {
             return "Depends on problem";
         }
 
@@ -934,11 +1058,11 @@ public class AddPostActivity extends BaseActivity {
                 return null;
             }
 
-            if (priceType.equals("$/hour")) {
+            if ("$/hour".equals(priceType)) {
 
                 return "$" + price + "/hour";
 
-            } else if (priceType.equals("Fixed")) {
+            } else if ("Fixed".equals(priceType)) {
 
                 return "$" + price;
 
@@ -963,12 +1087,24 @@ public class AddPostActivity extends BaseActivity {
             String city
     ) {
 
+        if (db == null ||
+                editServiceId == null ||
+                editServiceId.trim().isEmpty()) {
+
+            showError(
+                    "Invalid service"
+            );
+
+            return;
+        }
+
         db.collection("services")
                 .document(editServiceId)
                 .get()
                 .addOnSuccessListener(document -> {
 
-                    if (!document.exists()) {
+                    if (document == null ||
+                            !document.exists()) {
 
                         showError(
                                 "Service no longer exists"
@@ -1052,7 +1188,6 @@ public class AddPostActivity extends BaseActivity {
         if (!isValidImage(imageUri)) {
 
             setSubmittingState(false);
-
             return;
         }
 
@@ -1085,10 +1220,17 @@ public class AddPostActivity extends BaseActivity {
                 getContentResolver()
                         .getType(imageUri);
 
+        StorageMetadata.Builder metadataBuilder =
+                new StorageMetadata.Builder();
+
+        if (mimeType != null &&
+                !mimeType.trim().isEmpty()) {
+
+            metadataBuilder.setContentType(mimeType);
+        }
+
         StorageMetadata metadata =
-                new StorageMetadata.Builder()
-                        .setContentType(mimeType)
-                        .build();
+                metadataBuilder.build();
 
         fileRef.putFile(
                         imageUri,
@@ -1135,6 +1277,15 @@ public class AddPostActivity extends BaseActivity {
             String country,
             String city
     ) {
+
+        if (db == null) {
+
+            showError(
+                    "Database is not initialized"
+            );
+
+            return;
+        }
 
         List<String> tags =
                 generateTags(
@@ -1290,9 +1441,11 @@ public class AddPostActivity extends BaseActivity {
                         .toLowerCase(Locale.ROOT)
                         .trim();
 
-        uniqueTags.add(
-                normalizedProfession
-        );
+        if (!normalizedProfession.isEmpty()) {
+            uniqueTags.add(
+                    normalizedProfession
+            );
+        }
 
         String normalizedDescription =
                 description
@@ -1499,24 +1652,29 @@ public class AddPostActivity extends BaseActivity {
 
         isSubmitting = submitting;
 
-        btnSubmit.setEnabled(!submitting);
-        btnSelectImage.setEnabled(!submitting);
+        if (btnSubmit != null) {
+            btnSubmit.setEnabled(!submitting);
 
-        if (submitting) {
+            if (submitting) {
 
-            btnSubmit.setText(
-                    isEditMode
-                            ? "Updating..."
-                            : "Adding..."
-            );
+                btnSubmit.setText(
+                        isEditMode
+                                ? "Updating..."
+                                : "Adding..."
+                );
 
-        } else {
+            } else {
 
-            btnSubmit.setText(
-                    isEditMode
-                            ? "Update Service"
-                            : "Add Service"
-            );
+                btnSubmit.setText(
+                        isEditMode
+                                ? "Update Service"
+                                : "Add Service"
+                );
+            }
+        }
+
+        if (btnSelectImage != null) {
+            btnSelectImage.setEnabled(!submitting);
         }
     }
 
@@ -1526,6 +1684,11 @@ public class AddPostActivity extends BaseActivity {
 
         setSubmittingState(false);
 
+        if (isFinishing() ||
+                isDestroyed()) {
+            return;
+        }
+
         Toast.makeText(
                 this,
                 message,
@@ -1534,6 +1697,11 @@ public class AddPostActivity extends BaseActivity {
     }
 
     private void navigateHome() {
+
+        if (isFinishing() ||
+                isDestroyed()) {
+            return;
+        }
 
         Intent intent =
                 new Intent(
@@ -1553,9 +1721,17 @@ public class AddPostActivity extends BaseActivity {
 
     private void setupBottomNavigation() {
 
+        if (bottomNavigationView == null) {
+            return;
+        }
+
         bottomNavigationView
-                .setOnNavigationItemSelectedListener(
+                .setOnItemSelectedListener(
                         item -> {
+
+                            if (item == null) {
+                                return false;
+                            }
 
                             int id =
                                     item.getItemId();
@@ -1564,7 +1740,7 @@ public class AddPostActivity extends BaseActivity {
 
                                 startActivity(
                                         new Intent(
-                                                this,
+                                                AddPostActivity.this,
                                                 HomeActivity.class
                                         )
                                 );
@@ -1579,7 +1755,7 @@ public class AddPostActivity extends BaseActivity {
 
                                 startActivity(
                                         new Intent(
-                                                this,
+                                                AddPostActivity.this,
                                                 ChatListActivity.class
                                         )
                                 );
@@ -1600,7 +1776,7 @@ public class AddPostActivity extends BaseActivity {
 
                                 startActivity(
                                         new Intent(
-                                                this,
+                                                AddPostActivity.this,
                                                 ProfileActivity.class
                                         )
                                 );
@@ -1620,8 +1796,25 @@ public class AddPostActivity extends BaseActivity {
                 );
     }
 
+    private void showFatalInitializationError() {
+
+        Toast.makeText(
+                this,
+                "Could not initialize Add Service screen",
+                Toast.LENGTH_LONG
+        ).show();
+
+        finish();
+    }
+
     @Override
     public boolean onSupportNavigateUp() {
+
+        if (isFinishing() ||
+                isDestroyed()) {
+
+            return true;
+        }
 
         getOnBackPressedDispatcher()
                 .onBackPressed();
