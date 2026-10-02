@@ -1,16 +1,12 @@
 package com.example.goprox;
 
-import android.content.ContentResolver;
+import android.Manifest;
 import android.content.Intent;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.OpenableColumns;
+import android.provider.MediaStore;
 import android.text.InputFilter;
 import android.text.InputType;
-import android.view.View;
-import android.webkit.MimeTypeMap;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -19,110 +15,90 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.Toolbar;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageMetadata;
 import com.google.firebase.storage.StorageReference;
 
+import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 public class AddPostActivity extends BaseActivity {
 
-    private static final int PICK_IMAGE_REQUEST = 1;
+    private static final int PICK_IMAGE_REQUEST = 1001;
 
     private static final int MAX_NAME_LENGTH = 50;
     private static final int MAX_PROFESSION_LENGTH = 50;
     private static final int MAX_DESCRIPTION_LENGTH = 500;
     private static final int MAX_COUNTRY_LENGTH = 60;
     private static final int MAX_CITY_LENGTH = 60;
+    private static final double MAX_PRICE = 99999;
+    private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
 
-    private static final int MAX_PRICE = 99999;
-
-    private static final long MAX_IMAGE_SIZE_BYTES =
-            5L * 1024L * 1024L;
-
-    private static final List<String> FORBIDDEN_WORDS = Arrays.asList(
-            "sex",
-            "porn",
+    private static final String[] FORBIDDEN_WORDS = {
             "fuck",
             "shit",
-            "damn",
-            "cock",
-            "dick",
-            "pussy",
-            "asshole",
-            "bitch",
-            "whore",
-            "slut",
-            "cunt",
-            "motherfucker"
+            "porn",
+            "sex",
+            "nigger",
+            "nazi"
+    };
+
+    private static final Set<String> STOP_WORDS = new HashSet<>();
+
+    private static final String[] ALLOWED_IMAGE_MIME_TYPES = {
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp"
+    };
+
+    /*
+     * IMPORTANT:
+     * Do NOT use Pattern.UNICODE_CHARACTER_CLASS here.
+     * Some Android runtimes do not support that flag and the class
+     * initialization crashes before onCreate().
+     */
+    private static final Pattern SERVICE_TEXT_PATTERN = Pattern.compile(
+            "^[\\p{L}\\p{N}\\s.,!?()&+/#'’\\-:]+$"
     );
 
-    private static final List<String> STOP_WORDS = Arrays.asList(
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
-            "for", "of", "with", "by", "from", "as", "is", "was", "are",
-            "am", "be", "been", "being", "have", "has", "had", "do", "does",
-            "did", "will", "would", "shall", "should", "can", "could",
-            "may", "might", "must"
+    private static final Pattern LOCATION_PATTERN = Pattern.compile(
+            "^[\\p{L}\\p{N}\\s.'’\\-]+$"
     );
 
-    private static final Set<String> ALLOWED_IMAGE_MIME_TYPES =
-            new HashSet<>(Arrays.asList(
-                    "image/jpeg",
-                    "image/jpg",
-                    "image/png",
-                    "image/webp"
-            ));
-
-    private static final Pattern SERVICE_TEXT_PATTERN =
-            Pattern.compile(
-                    "^[\\p{L}\\p{N}\\s.,!?()&+/#'’\\-:]+$",
-                    Pattern.UNICODE_CHARACTER_CLASS
-            );
-
-    private static final Pattern LOCATION_PATTERN =
-            Pattern.compile(
-                    "^[\\p{L}\\p{N}\\s.'’\\-]+$",
-                    Pattern.UNICODE_CHARACTER_CLASS
-            );
-
-    private EditText etName;
-    private EditText etProfession;
-    private EditText etDescription;
-    private EditText etPrice;
-    private EditText etCountry;
-    private EditText etCity;
+    private TextInputEditText etName;
+    private TextInputEditText etProfession;
+    private TextInputEditText etDescription;
+    private TextInputEditText etPrice;
+    private TextInputEditText etCountry;
+    private TextInputEditText etCity;
 
     private Spinner spinnerPriceType;
 
-    private Button btnSubmit;
-    private Button btnSelectImage;
-
+    private MaterialButton btnSelectImage;
+    private MaterialButton btnSubmit;
     private ImageView ivServiceImage;
 
     private BottomNavigationView bottomNavigationView;
 
-    private FirebaseFirestore db;
+    private FirebaseAuth auth;
+    private FirebaseFirestore firestore;
     private FirebaseStorage storage;
-    private StorageReference storageRef;
 
     private String userId;
 
@@ -140,308 +116,152 @@ public class AddPostActivity extends BaseActivity {
 
         setContentView(R.layout.activity_add_post);
 
-        if (!initializeViews()) {
-            showFatalInitializationError();
-            return;
-        }
-
-        if (!initializeFirebase()) {
-            return;
-        }
-
+        initializeViews();
+        initializeFirebase();
         setupToolbar();
         setupPriceSpinner();
         setupInputFilters();
         setupListeners();
         setupBottomNavigation();
         setupBackHandling();
-
         checkEditMode();
     }
 
-    private boolean initializeViews() {
+    private void initializeViews() {
+        ivServiceImage = findViewById(R.id.ivServiceImage);
+        btnSelectImage = findViewById(R.id.btnSelectImage);
 
-        try {
-            etName = findViewById(R.id.etName);
-            etProfession = findViewById(R.id.etProfession);
-            etDescription = findViewById(R.id.etDescription);
-            etPrice = findViewById(R.id.etPrice);
+        etName = findViewById(R.id.etName);
+        etProfession = findViewById(R.id.etProfession);
+        etDescription = findViewById(R.id.etDescription);
+        etPrice = findViewById(R.id.etPrice);
+        etCountry = findViewById(R.id.etCountry);
+        etCity = findViewById(R.id.etCity);
 
-            etCountry = findViewById(R.id.etCountry);
-            etCity = findViewById(R.id.etCity);
+        spinnerPriceType = findViewById(R.id.spinnerPriceType);
 
-            spinnerPriceType = findViewById(R.id.spinnerPriceType);
+        btnSubmit = findViewById(R.id.btnSubmit);
 
-            btnSubmit = findViewById(R.id.btnSubmit);
-            btnSelectImage = findViewById(R.id.btnSelectImage);
-
-            ivServiceImage = findViewById(R.id.ivServiceImage);
-
-            bottomNavigationView = findViewById(R.id.bottomNavigation);
-
-            return etName != null
-                    && etProfession != null
-                    && etDescription != null
-                    && etPrice != null
-                    && etCountry != null
-                    && etCity != null
-                    && spinnerPriceType != null
-                    && btnSubmit != null
-                    && btnSelectImage != null
-                    && ivServiceImage != null
-                    && bottomNavigationView != null;
-
-        } catch (Exception e) {
-            return false;
-        }
+        bottomNavigationView = findViewById(R.id.bottomNavigation);
     }
 
-    private boolean initializeFirebase() {
+    private void initializeFirebase() {
+        auth = FirebaseAuth.getInstance();
+        firestore = FirebaseFirestore.getInstance();
+        storage = FirebaseStorage.getInstance();
 
-        try {
-            db = FirebaseFirestore.getInstance();
-            storage = FirebaseStorage.getInstance();
-            storageRef = FirebaseStorage.getInstance().getReference();
-
-            FirebaseUser currentUser =
-                    FirebaseAuth.getInstance().getCurrentUser();
-
-            if (currentUser == null) {
-
-                Toast.makeText(
-                        this,
-                        "Please sign in first",
-                        Toast.LENGTH_SHORT
-                ).show();
-
-                finish();
-                return false;
-            }
-
-            userId = currentUser.getUid();
-
-            if (userId == null || userId.trim().isEmpty()) {
-
-                Toast.makeText(
-                        this,
-                        "Authentication error",
-                        Toast.LENGTH_SHORT
-                ).show();
-
-                finish();
-                return false;
-            }
-
-            return true;
-
-        } catch (Exception e) {
-
+        if (auth.getCurrentUser() == null) {
             Toast.makeText(
                     this,
-                    "Could not initialize Firebase",
-                    Toast.LENGTH_LONG
+                    "Please log in first",
+                    Toast.LENGTH_SHORT
             ).show();
 
             finish();
-            return false;
+            return;
         }
+
+        userId = auth.getCurrentUser().getUid();
     }
 
     private void setupToolbar() {
+        androidx.appcompat.widget.Toolbar toolbar =
+                findViewById(R.id.toolbar);
 
-        try {
-
-            Toolbar toolbar = findViewById(R.id.toolbar);
-
-            if (toolbar == null) {
-                return;
-            }
-
+        if (toolbar != null) {
             setSupportActionBar(toolbar);
 
             if (getSupportActionBar() != null) {
-
-                getSupportActionBar()
-                        .setDisplayHomeAsUpEnabled(true);
-
-                getSupportActionBar()
-                        .setTitle(
-                                isEditMode
-                                        ? "Edit Service"
-                                        : "Add Service"
-                        );
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             }
 
-        } catch (Exception ignored) {
+            toolbar.setNavigationOnClickListener(v ->
+                    handleBackNavigation()
+            );
         }
     }
 
     private void setupPriceSpinner() {
-
         String[] priceTypes = {
-                "$/hour",
+                "$ / hour",
                 "Fixed",
                 "Depends on problem"
         };
 
-        ArrayAdapter<String> priceAdapter =
-                new ArrayAdapter<>(
-                        this,
-                        android.R.layout.simple_spinner_item,
-                        priceTypes
-                );
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                priceTypes
+        );
 
-        priceAdapter.setDropDownViewResource(
+        adapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item
         );
 
-        spinnerPriceType.setAdapter(priceAdapter);
-
-        spinnerPriceType.setOnItemSelectedListener(
-                new AdapterView.OnItemSelectedListener() {
-
-                    @Override
-                    public void onItemSelected(
-                            AdapterView<?> parent,
-                            View view,
-                            int position,
-                            long id
-                    ) {
-
-                        if (parent == null ||
-                                etPrice == null) {
-                            return;
-                        }
-
-                        Object selectedObject =
-                                parent.getItemAtPosition(position);
-
-                        String selected =
-                                selectedObject == null
-                                        ? ""
-                                        : selectedObject.toString();
-
-                        if ("Depends on problem".equals(selected)) {
-
-                            etPrice.setEnabled(false);
-                            etPrice.setText("");
-                            etPrice.setHint("Not required");
-
-                        } else {
-
-                            etPrice.setEnabled(true);
-                            etPrice.setHint("Price");
-                        }
-                    }
-
-                    @Override
-                    public void onNothingSelected(
-                            AdapterView<?> parent
-                    ) {
-                    }
-                }
-        );
+        spinnerPriceType.setAdapter(adapter);
     }
 
     private void setupInputFilters() {
 
-        etName.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        );
+        if (etName != null) {
+            etName.setFilters(new InputFilter[]{
+                    new InputFilter.LengthFilter(MAX_NAME_LENGTH)
+            });
+        }
 
-        etProfession.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        );
+        if (etProfession != null) {
+            etProfession.setFilters(new InputFilter[]{
+                    new InputFilter.LengthFilter(MAX_PROFESSION_LENGTH)
+            });
+        }
 
-        etDescription.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        );
+        if (etDescription != null) {
+            etDescription.setFilters(new InputFilter[]{
+                    new InputFilter.LengthFilter(MAX_DESCRIPTION_LENGTH)
+            });
+        }
 
-        etCountry.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        );
+        if (etCountry != null) {
+            etCountry.setFilters(new InputFilter[]{
+                    new InputFilter.LengthFilter(MAX_COUNTRY_LENGTH)
+            });
+        }
 
-        etCity.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        );
+        if (etCity != null) {
+            etCity.setFilters(new InputFilter[]{
+                    new InputFilter.LengthFilter(MAX_CITY_LENGTH)
+            });
+        }
 
-        etPrice.setInputType(
-                InputType.TYPE_CLASS_NUMBER
-        );
-
-        etName.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(
-                                MAX_NAME_LENGTH
-                        )
-                }
-        );
-
-        etProfession.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(
-                                MAX_PROFESSION_LENGTH
-                        )
-                }
-        );
-
-        etDescription.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(
-                                MAX_DESCRIPTION_LENGTH
-                        )
-                }
-        );
-
-        etCountry.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(
-                                MAX_COUNTRY_LENGTH
-                        )
-                }
-        );
-
-        etCity.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(
-                                MAX_CITY_LENGTH
-                        )
-                }
-        );
-
-        etPrice.setFilters(
-                new InputFilter[]{
-                        new InputFilter.LengthFilter(5)
-                }
-        );
+        if (etPrice != null) {
+            etPrice.setInputType(
+                    InputType.TYPE_CLASS_NUMBER |
+                            InputType.TYPE_NUMBER_FLAG_DECIMAL
+            );
+        }
     }
 
     private void setupListeners() {
 
-        btnSelectImage.setOnClickListener(
-                v -> openFileChooser()
-        );
+        if (btnSelectImage != null) {
+            btnSelectImage.setOnClickListener(v ->
+                    openImagePicker()
+            );
+        }
 
-        btnSubmit.setOnClickListener(
-                v -> addService()
-        );
+        if (btnSubmit != null) {
+            btnSubmit.setOnClickListener(v ->
+                    addService()
+            );
+        }
     }
 
     private void setupBackHandling() {
-
         getOnBackPressedDispatcher().addCallback(
                 this,
                 new OnBackPressedCallback(true) {
-
                     @Override
                     public void handleOnBackPressed() {
-
                         handleBackNavigation();
                     }
                 }
@@ -450,26 +270,12 @@ public class AddPostActivity extends BaseActivity {
 
     private void handleBackNavigation() {
 
-        if (isFinishing() || isDestroyed()) {
-            return;
-        }
-
         if (isSubmitting) {
-
-            new AlertDialog.Builder(this)
-                    .setTitle("Upload in progress")
-                    .setMessage(
-                            "The service is being saved. Are you sure you want to leave?"
-                    )
-                    .setNegativeButton(
-                            "Stay",
-                            null
-                    )
-                    .setPositiveButton(
-                            "Leave",
-                            (dialog, which) -> finish()
-                    )
-                    .show();
+            Toast.makeText(
+                    this,
+                    "Please wait until the operation finishes",
+                    Toast.LENGTH_SHORT
+            ).show();
 
             return;
         }
@@ -481,57 +287,37 @@ public class AddPostActivity extends BaseActivity {
 
         Intent intent = getIntent();
 
-        if (intent == null ||
-                !intent.hasExtra("serviceId")) {
-
-            updateToolbarTitle();
+        if (intent == null) {
             return;
         }
 
-        editServiceId =
-                intent.getStringExtra("serviceId");
+        editServiceId = intent.getStringExtra("serviceId");
 
-        if (editServiceId == null ||
-                editServiceId.trim().isEmpty()) {
-
-            Toast.makeText(
-                    this,
-                    "Invalid service",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            finish();
+        if (editServiceId == null || editServiceId.trim().isEmpty()) {
             return;
         }
 
         isEditMode = true;
 
-        updateToolbarTitle();
-
         if (btnSubmit != null) {
             btnSubmit.setText("Update Service");
         }
 
-        String name =
-                intent.getStringExtra("name");
+        androidx.appcompat.widget.Toolbar toolbar =
+                findViewById(R.id.toolbar);
 
-        String profession =
-                intent.getStringExtra("profession");
+        if (toolbar != null) {
+            toolbar.setTitle("Edit Service");
+        }
 
-        String description =
-                intent.getStringExtra("description");
-
-        String country =
-                intent.getStringExtra("country");
-
-        String city =
-                intent.getStringExtra("city");
-
-        String price =
-                intent.getStringExtra("price");
-
-        existingImageUrl =
-                intent.getStringExtra("imageUrl");
+        String name = intent.getStringExtra("name");
+        String profession = intent.getStringExtra("profession");
+        String description = intent.getStringExtra("description");
+        String price = intent.getStringExtra("price");
+        String priceType = intent.getStringExtra("priceType");
+        String country = intent.getStringExtra("country");
+        String city = intent.getStringExtra("city");
+        existingImageUrl = intent.getStringExtra("imageUrl");
 
         if (name != null) {
             etName.setText(name);
@@ -545,6 +331,10 @@ public class AddPostActivity extends BaseActivity {
             etDescription.setText(description);
         }
 
+        if (price != null) {
+            etPrice.setText(price);
+        }
+
         if (country != null) {
             etCountry.setText(country);
         }
@@ -553,112 +343,50 @@ public class AddPostActivity extends BaseActivity {
             etCity.setText(city);
         }
 
-        applyExistingPrice(price);
+        if (priceType != null && spinnerPriceType != null) {
 
-        if (existingImageUrl != null &&
-                !existingImageUrl.trim().isEmpty()) {
+            ArrayAdapter<String> adapter =
+                    (ArrayAdapter<String>) spinnerPriceType.getAdapter();
 
-            try {
+            if (adapter != null) {
+                int position = adapter.getPosition(priceType);
 
-                Glide.with(this)
-                        .load(existingImageUrl)
-                        .placeholder(
-                                R.drawable.ic_profile_placeholder
-                        )
-                        .error(
-                                R.drawable.ic_profile_placeholder
-                        )
-                        .into(ivServiceImage);
-
-            } catch (Exception ignored) {
+                if (position >= 0) {
+                    spinnerPriceType.setSelection(position);
+                }
             }
         }
-    }
 
-    private void updateToolbarTitle() {
+        if (existingImageUrl != null &&
+                !existingImageUrl.trim().isEmpty() &&
+                ivServiceImage != null) {
 
-        if (getSupportActionBar() != null) {
-
-            getSupportActionBar()
-                    .setTitle(
-                            isEditMode
-                                    ? "Edit Service"
-                                    : "Add Service"
-                    );
+            Glide.with(this)
+                    .load(existingImageUrl)
+                    .centerCrop()
+                    .into(ivServiceImage);
         }
     }
 
-    private void applyExistingPrice(String price) {
+    private void openImagePicker() {
 
-        if (price == null ||
-                price.trim().isEmpty()) {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
 
-            return;
-        }
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
 
-        if (price.equalsIgnoreCase(
-                "Depends on problem"
-        )) {
-
-            spinnerPriceType.setSelection(2);
-            etPrice.setText("");
-
-            return;
-        }
-
-        String normalizedPrice =
-                price.replaceAll(
-                        "[^0-9]",
-                        ""
-                );
-
-        etPrice.setText(normalizedPrice);
-
-        if (price.contains("/hour")) {
-
-            spinnerPriceType.setSelection(0);
-
-        } else if (price.contains("$")) {
-
-            spinnerPriceType.setSelection(1);
-        }
-    }
-
-    private void openFileChooser() {
-
-        try {
-
-            Intent intent =
-                    new Intent(Intent.ACTION_GET_CONTENT);
-
-            intent.setType("image/*");
-
-            intent.addCategory(
-                    Intent.CATEGORY_OPENABLE
-            );
-
-            startActivityForResult(
-                    intent,
-                    PICK_IMAGE_REQUEST
-            );
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "Could not open image picker",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
+        startActivityForResult(
+                Intent.createChooser(intent, "Select image"),
+                PICK_IMAGE_REQUEST
+        );
     }
 
     @Override
     protected void onActivityResult(
             int requestCode,
             int resultCode,
-            @Nullable Intent data
+            Intent data
     ) {
-
         super.onActivityResult(
                 requestCode,
                 resultCode,
@@ -669,12 +397,10 @@ public class AddPostActivity extends BaseActivity {
                 resultCode != RESULT_OK ||
                 data == null ||
                 data.getData() == null) {
-
             return;
         }
 
-        Uri selectedUri =
-                data.getData();
+        Uri selectedUri = data.getData();
 
         if (!isValidImage(selectedUri)) {
             return;
@@ -682,70 +408,49 @@ public class AddPostActivity extends BaseActivity {
 
         imageUri = selectedUri;
 
-        try {
-
-            ivServiceImage.setImageURI(
-                    imageUri
-            );
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "Could not preview image",
-                    Toast.LENGTH_SHORT
-            ).show();
+        if (ivServiceImage != null) {
+            Glide.with(this)
+                    .load(imageUri)
+                    .centerCrop()
+                    .into(ivServiceImage);
         }
     }
 
     private boolean isValidImage(Uri uri) {
 
         if (uri == null) {
+            showError("Invalid image");
             return false;
         }
 
-        ContentResolver resolver =
-                getContentResolver();
+        String mimeType = getContentResolver()
+                .getType(uri);
 
-        String mimeType =
-                resolver.getType(uri);
-
-        if (mimeType == null ||
-                !ALLOWED_IMAGE_MIME_TYPES.contains(
-                        mimeType.toLowerCase(Locale.ROOT)
-                )) {
-
-            Toast.makeText(
-                    this,
-                    "Please select a JPG, PNG or WebP image",
-                    Toast.LENGTH_LONG
-            ).show();
-
+        if (mimeType == null) {
+            showError("Could not determine image type");
             return false;
         }
 
-        long fileSize =
-                getFileSize(uri);
+        boolean allowedType = false;
 
-        if (fileSize <= 0) {
+        for (String allowed : ALLOWED_IMAGE_MIME_TYPES) {
+            if (allowed.equalsIgnoreCase(mimeType)) {
+                allowedType = true;
+                break;
+            }
+        }
 
-            Toast.makeText(
-                    this,
-                    "Could not read image",
-                    Toast.LENGTH_SHORT
-            ).show();
-
+        if (!allowedType) {
+            showError(
+                    "Only JPG, PNG and WebP images are allowed"
+            );
             return false;
         }
+
+        long fileSize = getFileSize(uri);
 
         if (fileSize > MAX_IMAGE_SIZE_BYTES) {
-
-            Toast.makeText(
-                    this,
-                    "Image must be 5 MB or smaller",
-                    Toast.LENGTH_LONG
-            ).show();
-
+            showError("Image must be smaller than 5 MB");
             return false;
         }
 
@@ -754,46 +459,41 @@ public class AddPostActivity extends BaseActivity {
 
     private long getFileSize(Uri uri) {
 
-        Cursor cursor = null;
-
         try {
-
-            cursor =
+            android.database.Cursor cursor =
                     getContentResolver().query(
                             uri,
-                            new String[]{
-                                    OpenableColumns.SIZE
-                            },
+                            null,
                             null,
                             null,
                             null
                     );
 
-            if (cursor != null &&
-                    cursor.moveToFirst()) {
+            if (cursor != null) {
 
                 int sizeIndex =
                         cursor.getColumnIndex(
-                                OpenableColumns.SIZE
+                                android.provider.OpenableColumns.SIZE
                         );
 
-                if (sizeIndex >= 0 &&
+                if (cursor.moveToFirst() &&
+                        sizeIndex >= 0 &&
                         !cursor.isNull(sizeIndex)) {
 
-                    return cursor.getLong(sizeIndex);
+                    long size = cursor.getLong(sizeIndex);
+
+                    cursor.close();
+
+                    return size;
                 }
+
+                cursor.close();
             }
 
         } catch (Exception ignored) {
-
-        } finally {
-
-            if (cursor != null) {
-                cursor.close();
-            }
         }
 
-        return -1;
+        return 0;
     }
 
     private void addService() {
@@ -802,853 +502,443 @@ public class AddPostActivity extends BaseActivity {
             return;
         }
 
-        if (userId == null ||
-                userId.trim().isEmpty()) {
+        if (auth == null ||
+                auth.getCurrentUser() == null) {
 
-            Toast.makeText(
-                    this,
-                    "Authentication required",
-                    Toast.LENGTH_SHORT
-            ).show();
-
+            showError("Please log in again");
             return;
         }
 
-        String name =
-                normalizeText(
-                        etName.getText().toString()
-                );
+        String name = getText(etName);
+        String profession = getText(etProfession);
+        String description = getText(etDescription);
+        String priceText = getText(etPrice);
+        String country = getText(etCountry);
+        String city = getText(etCity);
 
-        String profession =
-                normalizeText(
-                        etProfession.getText().toString()
-                );
+        String priceType = "";
 
-        String description =
-                normalizeText(
-                        etDescription.getText().toString()
-                );
+        if (spinnerPriceType != null &&
+                spinnerPriceType.getSelectedItem() != null) {
 
-        String priceNumber =
-                etPrice.getText().toString().trim();
+            priceType =
+                    spinnerPriceType
+                            .getSelectedItem()
+                            .toString()
+                            .trim();
+        }
 
-        Object selectedPriceType =
-                spinnerPriceType.getSelectedItem();
-
-        String priceType =
-                selectedPriceType == null
-                        ? ""
-                        : selectedPriceType.toString();
-
-        String country =
-                normalizeLocation(
-                        etCountry.getText().toString()
-                );
-
-        String city =
-                normalizeLocation(
-                        etCity.getText().toString()
-                );
-
-        String validationError =
-                validateInput(
-                        name,
-                        profession,
-                        description,
-                        priceNumber,
-                        priceType,
-                        country,
-                        city
-                );
-
-        if (validationError != null) {
-
-            Toast.makeText(
-                    this,
-                    validationError,
-                    Toast.LENGTH_LONG
-            ).show();
-
+        if (!validateService(
+                name,
+                profession,
+                description,
+                priceText,
+                country,
+                city
+        )) {
             return;
         }
 
-        String priceFormatted =
-                buildFormattedPrice(
-                        priceNumber,
-                        priceType
-                );
+        double price;
 
-        if (priceFormatted == null) {
+        try {
+            price = Double.parseDouble(
+                    priceText.replace(",", ".")
+            );
+        } catch (Exception e) {
+            showError("Invalid price");
+            return;
+        }
 
-            Toast.makeText(
-                    this,
-                    "Invalid price",
-                    Toast.LENGTH_SHORT
-            ).show();
-
+        if (price < 0 || price > MAX_PRICE) {
+            showError("Price must be between 0 and 99999");
             return;
         }
 
         setSubmittingState(true);
 
-        if (isEditMode) {
-
-            verifyEditOwnershipAndSave(
+        if (imageUri != null) {
+            uploadImageAndSave(
                     name,
                     profession,
                     description,
-                    priceFormatted,
+                    price,
                     priceType,
                     country,
                     city
             );
-
         } else {
-
-            if (imageUri != null) {
-
-                uploadImageAndSave(
-                        name,
-                        profession,
-                        description,
-                        priceFormatted,
-                        priceType,
-                        country,
-                        city
-                );
-
-            } else {
-
-                saveServiceToFirestore(
-                        name,
-                        profession,
-                        description,
-                        priceFormatted,
-                        priceType,
-                        null,
-                        country,
-                        city
-                );
-            }
+            saveServiceToFirestore(
+                    name,
+                    profession,
+                    description,
+                    price,
+                    priceType,
+                    country,
+                    city,
+                    existingImageUrl
+            );
         }
     }
 
-    private String validateInput(
+    private boolean validateService(
             String name,
             String profession,
             String description,
-            String priceNumber,
-            String priceType,
+            String priceText,
             String country,
             String city
     ) {
 
         if (name.isEmpty()) {
-            return "Name is required";
+            showError("Enter service name");
+            return false;
         }
 
         if (profession.isEmpty()) {
-            return "Profession is required";
+            showError("Enter profession");
+            return false;
         }
 
         if (description.isEmpty()) {
-            return "Description is required";
+            showError("Enter service description");
+            return false;
         }
 
-        if (name.length() > MAX_NAME_LENGTH) {
-            return "Name is too long";
+        if (priceText.isEmpty()) {
+            showError("Enter price");
+            return false;
         }
 
-        if (profession.length() > MAX_PROFESSION_LENGTH) {
-            return "Profession is too long";
+        if (country.isEmpty()) {
+            showError("Enter country");
+            return false;
         }
 
-        if (description.length() > MAX_DESCRIPTION_LENGTH) {
-            return "Description is too long";
-        }
-
-        if (country.length() > MAX_COUNTRY_LENGTH) {
-            return "Country is too long";
-        }
-
-        if (city.length() > MAX_CITY_LENGTH) {
-            return "City is too long";
+        if (city.isEmpty()) {
+            showError("Enter city");
+            return false;
         }
 
         if (!SERVICE_TEXT_PATTERN.matcher(name).matches()) {
-            return "Name contains unsupported characters";
+            showError("Service name contains invalid characters");
+            return false;
         }
 
         if (!SERVICE_TEXT_PATTERN.matcher(profession).matches()) {
-            return "Profession contains unsupported characters";
+            showError("Profession contains invalid characters");
+            return false;
         }
 
         if (!SERVICE_TEXT_PATTERN.matcher(description).matches()) {
-            return "Description contains unsupported characters";
+            showError("Description contains invalid characters");
+            return false;
         }
 
-        if (!country.isEmpty() &&
-                !LOCATION_PATTERN.matcher(country).matches()) {
-
-            return "Country contains unsupported characters";
+        if (!LOCATION_PATTERN.matcher(country).matches()) {
+            showError("Country contains invalid characters");
+            return false;
         }
 
-        if (!city.isEmpty() &&
-                !LOCATION_PATTERN.matcher(city).matches()) {
-
-            return "City contains unsupported characters";
+        if (!LOCATION_PATTERN.matcher(city).matches()) {
+            showError("City contains invalid characters");
+            return false;
         }
 
         if (containsForbiddenWord(name) ||
                 containsForbiddenWord(profession) ||
                 containsForbiddenWord(description)) {
 
-            return "Please remove inappropriate words";
+            showError("Please use appropriate language");
+            return false;
         }
 
-        if (!"Depends on problem".equals(priceType)) {
-
-            if (priceNumber.isEmpty()) {
-                return "Price is required";
-            }
-
-            try {
-
-                int price =
-                        Integer.parseInt(priceNumber);
-
-                if (price < 0 ||
-                        price > MAX_PRICE) {
-
-                    return "Price must be between 0 and 99999";
-                }
-
-            } catch (NumberFormatException e) {
-
-                return "Invalid price";
-            }
-        }
-
-        return null;
+        return true;
     }
 
-    private String buildFormattedPrice(
-            String priceNumber,
-            String priceType
-    ) {
+    private boolean containsForbiddenWord(String text) {
 
-        if ("Depends on problem".equals(priceType)) {
-            return "Depends on problem";
-        }
-
-        if (priceNumber == null ||
-                priceNumber.trim().isEmpty()) {
-
-            return null;
-        }
-
-        try {
-
-            int price =
-                    Integer.parseInt(priceNumber);
-
-            if (price < 0 ||
-                    price > MAX_PRICE) {
-
-                return null;
-            }
-
-            if ("$/hour".equals(priceType)) {
-
-                return "$" + price + "/hour";
-
-            } else if ("Fixed".equals(priceType)) {
-
-                return "$" + price;
-
-            } else {
-
-                return "$" + price;
-            }
-
-        } catch (NumberFormatException e) {
-
-            return null;
-        }
-    }
-
-    private void verifyEditOwnershipAndSave(
-            String name,
-            String profession,
-            String description,
-            String priceFormatted,
-            String priceType,
-            String country,
-            String city
-    ) {
-
-        if (db == null ||
-                editServiceId == null ||
-                editServiceId.trim().isEmpty()) {
-
-            showError(
-                    "Invalid service"
-            );
-
-            return;
-        }
-
-        db.collection("services")
-                .document(editServiceId)
-                .get()
-                .addOnSuccessListener(document -> {
-
-                    if (document == null ||
-                            !document.exists()) {
-
-                        showError(
-                                "Service no longer exists"
-                        );
-
-                        return;
-                    }
-
-                    String ownerId =
-                            document.getString("userId");
-
-                    if (ownerId == null ||
-                            !ownerId.equals(userId)) {
-
-                        showError(
-                                "You cannot edit this service"
-                        );
-
-                        return;
-                    }
-
-                    if (imageUri != null) {
-
-                        uploadImageAndSave(
-                                name,
-                                profession,
-                                description,
-                                priceFormatted,
-                                priceType,
-                                country,
-                                city
-                        );
-
-                    } else {
-
-                        saveServiceToFirestore(
-                                name,
-                                profession,
-                                description,
-                                priceFormatted,
-                                priceType,
-                                existingImageUrl,
-                                country,
-                                city
-                        );
-                    }
-                })
-                .addOnFailureListener(e ->
-                        showError(
-                                "Could not verify service ownership"
-                        )
-                );
-    }
-
-    private void uploadImageAndSave(
-            String name,
-            String profession,
-            String description,
-            String priceFormatted,
-            String priceType,
-            String country,
-            String city
-    ) {
-
-        if (imageUri == null) {
-
-            saveServiceToFirestore(
-                    name,
-                    profession,
-                    description,
-                    priceFormatted,
-                    priceType,
-                    existingImageUrl,
-                    country,
-                    city
-            );
-
-            return;
-        }
-
-        if (!isValidImage(imageUri)) {
-
-            setSubmittingState(false);
-            return;
-        }
-
-        String extension =
-                getFileExtension(imageUri);
-
-        if (extension == null ||
-                extension.trim().isEmpty()) {
-
-            showError(
-                    "Unsupported image format"
-            );
-
-            return;
-        }
-
-        String fileName =
-                UUID.randomUUID()
-                        .toString()
-                        + "."
-                        + extension;
-
-        StorageReference fileRef =
-                storageRef.child(
-                        "service_images/"
-                                + fileName
-                );
-
-        String mimeType =
-                getContentResolver()
-                        .getType(imageUri);
-
-        StorageMetadata.Builder metadataBuilder =
-                new StorageMetadata.Builder();
-
-        if (mimeType != null &&
-                !mimeType.trim().isEmpty()) {
-
-            metadataBuilder.setContentType(mimeType);
-        }
-
-        StorageMetadata metadata =
-                metadataBuilder.build();
-
-        fileRef.putFile(
-                        imageUri,
-                        metadata
-                )
-                .addOnSuccessListener(
-                        taskSnapshot ->
-                                fileRef.getDownloadUrl()
-                                        .addOnSuccessListener(
-                                                downloadUri ->
-                                                        saveServiceToFirestore(
-                                                                name,
-                                                                profession,
-                                                                description,
-                                                                priceFormatted,
-                                                                priceType,
-                                                                downloadUri.toString(),
-                                                                country,
-                                                                city
-                                                        )
-                                        )
-                                        .addOnFailureListener(
-                                                e ->
-                                                        showError(
-                                                                "Could not get uploaded image URL"
-                                                        )
-                                        )
-                )
-                .addOnFailureListener(
-                        e ->
-                                showError(
-                                        "Image upload failed"
-                                )
-                );
-    }
-
-    private void saveServiceToFirestore(
-            String name,
-            String profession,
-            String description,
-            String priceFormatted,
-            String priceType,
-            @Nullable String imageUrl,
-            String country,
-            String city
-    ) {
-
-        if (db == null) {
-
-            showError(
-                    "Database is not initialized"
-            );
-
-            return;
-        }
-
-        List<String> tags =
-                generateTags(
-                        profession,
-                        description
-                );
-
-        Map<String, Object> service =
-                new HashMap<>();
-
-        service.put(
-                "name",
-                name
-        );
-
-        service.put(
-                "profession",
-                profession
-        );
-
-        service.put(
-                "description",
-                description
-        );
-
-        service.put(
-                "price",
-                priceFormatted
-        );
-
-        service.put(
-                "priceType",
-                priceType
-        );
-
-        service.put(
-                "userId",
-                userId
-        );
-
-        service.put(
-                "tags",
-                tags
-        );
-
-        if (imageUrl != null &&
-                !imageUrl.trim().isEmpty()) {
-
-            service.put(
-                    "imageUrl",
-                    imageUrl
-            );
-        }
-
-        if (country != null &&
-                !country.isEmpty()) {
-
-            service.put(
-                    "country",
-                    country
-            );
-        }
-
-        if (city != null &&
-                !city.isEmpty()) {
-
-            service.put(
-                    "city",
-                    city
-            );
-        }
-
-        if (isEditMode &&
-                editServiceId != null) {
-
-            service.put(
-                    "updatedAt",
-                    FieldValue.serverTimestamp()
-            );
-
-            db.collection("services")
-                    .document(editServiceId)
-                    .update(service)
-                    .addOnSuccessListener(
-                            unused -> {
-
-                                Toast.makeText(
-                                        this,
-                                        "Service updated!",
-                                        Toast.LENGTH_SHORT
-                                ).show();
-
-                                navigateHome();
-                            }
-                    )
-                    .addOnFailureListener(
-                            e ->
-                                    showError(
-                                            "Could not update service"
-                                    )
-                    );
-
-        } else {
-
-            service.put(
-                    "rating",
-                    0.0
-            );
-
-            service.put(
-                    "ratingCount",
-                    0
-            );
-
-            service.put(
-                    "createdAt",
-                    FieldValue.serverTimestamp()
-            );
-
-            db.collection("services")
-                    .add(service)
-                    .addOnSuccessListener(
-                            documentReference -> {
-
-                                Toast.makeText(
-                                        this,
-                                        "Service added!",
-                                        Toast.LENGTH_SHORT
-                                ).show();
-
-                                navigateHome();
-                            }
-                    )
-                    .addOnFailureListener(
-                            e ->
-                                    showError(
-                                            "Could not save service"
-                                    )
-                    );
-        }
-    }
-
-    private List<String> generateTags(
-            String profession,
-            String description
-    ) {
-
-        Set<String> uniqueTags =
-                new HashSet<>();
-
-        String normalizedProfession =
-                profession
-                        .toLowerCase(Locale.ROOT)
-                        .trim();
-
-        if (!normalizedProfession.isEmpty()) {
-            uniqueTags.add(
-                    normalizedProfession
-            );
-        }
-
-        String normalizedDescription =
-                description
-                        .toLowerCase(Locale.ROOT);
-
-        String[] words =
-                normalizedDescription.split(
-                        "[\\s,.?!:;()\\[\\]{}+/\\-]+"
-                );
-
-        for (String word : words) {
-
-            String cleanWord =
-                    word.trim();
-
-            if (cleanWord.length() > 3 &&
-                    !STOP_WORDS.contains(cleanWord)) {
-
-                uniqueTags.add(cleanWord);
-            }
-        }
-
-        if (normalizedProfession.contains("php")) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "backend",
-                            "server",
-                            "web",
-                            "database"
-                    )
-            );
-
-        } else if (
-                normalizedProfession.contains("ios") ||
-                        normalizedProfession.contains("swift")
-        ) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "mobile",
-                            "apple",
-                            "swift",
-                            "iphone"
-                    )
-            );
-
-        } else if (
-                normalizedProfession.contains("android")
-        ) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "mobile",
-                            "java",
-                            "kotlin",
-                            "google"
-                    )
-            );
-
-        } else if (
-                normalizedProfession.contains("electrician")
-        ) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "electrical",
-                            "wiring",
-                            "repair",
-                            "maintenance"
-                    )
-            );
-
-        } else if (
-                normalizedProfession.contains("plumber")
-        ) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "pipe",
-                            "leak",
-                            "water",
-                            "repair"
-                    )
-            );
-
-        } else if (
-                normalizedProfession.contains("developer") ||
-                        normalizedProfession.contains("programmer")
-        ) {
-
-            uniqueTags.addAll(
-                    Arrays.asList(
-                            "coding",
-                            "software",
-                            "development"
-                    )
-            );
-        }
-
-        return new ArrayList<>(uniqueTags);
-    }
-
-    private boolean containsForbiddenWord(
-            String text
-    ) {
-
-        if (text == null ||
-                text.trim().isEmpty()) {
-
+        if (text == null) {
             return false;
         }
 
         String normalized =
-                text.toLowerCase(Locale.ROOT)
-                        .replaceAll(
-                                "[^\\p{L}\\p{N}]+",
-                                " "
-                        )
-                        .trim();
+                text.toLowerCase(Locale.ROOT);
 
-        if (normalized.isEmpty()) {
-            return false;
-        }
+        for (String word : FORBIDDEN_WORDS) {
 
-        String[] words =
-                normalized.split("\\s+");
-
-        for (String word : words) {
-
-            for (String forbidden :
-                    FORBIDDEN_WORDS) {
-
-                if (word.equals(forbidden)) {
-                    return true;
-                }
+            if (normalized.contains(word)) {
+                return true;
             }
         }
 
         return false;
     }
 
-    private String normalizeText(
-            String text
+    private void uploadImageAndSave(
+            String name,
+            String profession,
+            String description,
+            double price,
+            String priceType,
+            String country,
+            String city
     ) {
 
-        if (text == null) {
-            return "";
+        if (imageUri == null) {
+            saveServiceToFirestore(
+                    name,
+                    profession,
+                    description,
+                    price,
+                    priceType,
+                    country,
+                    city,
+                    existingImageUrl
+            );
+
+            return;
         }
 
-        return text
-                .trim()
-                .replaceAll("\\s+", " ");
+        String fileName =
+                userId + "_" +
+                        System.currentTimeMillis() +
+                        ".jpg";
+
+        StorageReference imageRef =
+                storage.getReference()
+                        .child("service_images")
+                        .child(userId)
+                        .child(fileName);
+
+        imageRef.putFile(imageUri)
+                .addOnSuccessListener(taskSnapshot ->
+                        imageRef.getDownloadUrl()
+                                .addOnSuccessListener(downloadUri ->
+                                        saveServiceToFirestore(
+                                                name,
+                                                profession,
+                                                description,
+                                                price,
+                                                priceType,
+                                                country,
+                                                city,
+                                                downloadUri.toString()
+                                        )
+                                )
+                                .addOnFailureListener(e -> {
+                                    setSubmittingState(false);
+                                    showError(
+                                            "Failed to get image URL"
+                                    );
+                                })
+                )
+                .addOnFailureListener(e -> {
+                    setSubmittingState(false);
+                    showError(
+                            "Failed to upload image"
+                    );
+                });
     }
 
-    private String normalizeLocation(
-            String text
+    private void saveServiceToFirestore(
+            String name,
+            String profession,
+            String description,
+            double price,
+            String priceType,
+            String country,
+            String city,
+            String imageUrl
     ) {
 
-        if (text == null) {
-            return "";
+        if (firestore == null ||
+                userId == null ||
+                userId.trim().isEmpty()) {
+
+            setSubmittingState(false);
+            showError("Database is not available");
+            return;
         }
 
-        return text
-                .trim()
-                .replaceAll("\\s+", " ");
-    }
+        Map<String, Object> service = new HashMap<>();
 
-    private String getFileExtension(
-            Uri uri
-    ) {
+        service.put("userId", userId);
+        service.put("name", name);
+        service.put("profession", profession);
+        service.put("description", description);
+        service.put("price", price);
+        service.put("priceType", priceType);
+        service.put("country", country);
+        service.put("city", city);
 
-        if (uri == null) {
-            return null;
+        if (imageUrl != null &&
+                !imageUrl.trim().isEmpty()) {
+
+            service.put("imageUrl", imageUrl);
         }
 
-        String mimeType =
-                getContentResolver()
-                        .getType(uri);
-
-        if (mimeType == null) {
-            return null;
-        }
-
-        String extension =
-                MimeTypeMap
-                        .getSingleton()
-                        .getExtensionFromMimeType(
-                                mimeType
-                        );
-
-        if (extension == null) {
-            return null;
-        }
-
-        return extension.toLowerCase(
-                Locale.ROOT
+        service.put(
+                "tags",
+                generateTags(
+                        name,
+                        profession,
+                        description,
+                        country,
+                        city
+                )
         );
+
+        if (isEditMode &&
+                editServiceId != null &&
+                !editServiceId.trim().isEmpty()) {
+
+            DocumentReference serviceRef =
+                    firestore.collection("services")
+                            .document(editServiceId);
+
+            service.put(
+                    "updatedAt",
+                    com.google.firebase.firestore.FieldValue.serverTimestamp()
+            );
+
+            serviceRef.set(
+                            service,
+                            SetOptions.merge()
+                    )
+                    .addOnSuccessListener(unused -> {
+                        setSubmittingState(false);
+
+                        Toast.makeText(
+                                this,
+                                "Service updated successfully",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        navigateHome();
+                    })
+                    .addOnFailureListener(e -> {
+                        setSubmittingState(false);
+
+                        showError(
+                                "Failed to update service: " +
+                                        e.getMessage()
+                        );
+                    });
+
+        } else {
+
+            service.put("rating", 0.0);
+            service.put("ratingCount", 0L);
+
+            service.put(
+                    "createdAt",
+                    com.google.firebase.firestore.FieldValue.serverTimestamp()
+            );
+
+            service.put(
+                    "updatedAt",
+                    com.google.firebase.firestore.FieldValue.serverTimestamp()
+            );
+
+            firestore.collection("services")
+                    .add(service)
+                    .addOnSuccessListener(documentReference -> {
+
+                        setSubmittingState(false);
+
+                        Toast.makeText(
+                                this,
+                                "Service added successfully",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        navigateHome();
+                    })
+                    .addOnFailureListener(e -> {
+
+                        setSubmittingState(false);
+
+                        showError(
+                                "Failed to save service: " +
+                                        e.getMessage()
+                        );
+                    });
+        }
     }
 
-    private void setSubmittingState(
-            boolean submitting
+    private List<String> generateTags(
+            String name,
+            String profession,
+            String description,
+            String country,
+            String city
     ) {
+
+        Set<String> tags = new HashSet<>();
+
+        addWordsToTags(tags, name);
+        addWordsToTags(tags, profession);
+        addWordsToTags(tags, description);
+        addWordsToTags(tags, country);
+        addWordsToTags(tags, city);
+
+        return new ArrayList<>(tags);
+    }
+
+    private void addWordsToTags(
+            Set<String> tags,
+            String text
+    ) {
+
+        if (text == null) {
+            return;
+        }
+
+        String normalized =
+                text.toLowerCase(Locale.ROOT);
+
+        String[] words =
+                normalized.split("\\s+");
+
+        for (String word : words) {
+
+            word = word
+                    .replaceAll(
+                            "[^\\p{L}\\p{N}]",
+                            ""
+                    )
+                    .trim();
+
+            if (word.isEmpty()) {
+                continue;
+            }
+
+            if (STOP_WORDS.contains(word)) {
+                continue;
+            }
+
+            if (word.length() >= 2) {
+                tags.add(word);
+            }
+        }
+    }
+
+    private String getText(EditText editText) {
+
+        if (editText == null ||
+                editText.getText() == null) {
+
+            return "";
+        }
+
+        return editText
+                .getText()
+                .toString()
+                .trim();
+    }
+
+    private void setSubmittingState(boolean submitting) {
 
         isSubmitting = submitting;
 
@@ -1656,15 +946,12 @@ public class AddPostActivity extends BaseActivity {
             btnSubmit.setEnabled(!submitting);
 
             if (submitting) {
-
                 btnSubmit.setText(
                         isEditMode
                                 ? "Updating..."
                                 : "Adding..."
                 );
-
             } else {
-
                 btnSubmit.setText(
                         isEditMode
                                 ? "Update Service"
@@ -1678,16 +965,7 @@ public class AddPostActivity extends BaseActivity {
         }
     }
 
-    private void showError(
-            String message
-    ) {
-
-        setSubmittingState(false);
-
-        if (isFinishing() ||
-                isDestroyed()) {
-            return;
-        }
+    private void showError(String message) {
 
         Toast.makeText(
                 this,
@@ -1698,24 +976,18 @@ public class AddPostActivity extends BaseActivity {
 
     private void navigateHome() {
 
-        if (isFinishing() ||
-                isDestroyed()) {
-            return;
-        }
-
         Intent intent =
                 new Intent(
                         this,
                         HomeActivity.class
                 );
 
-        intent.setFlags(
+        intent.addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP |
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
         );
 
         startActivity(intent);
-
         finish();
     }
 
@@ -1725,100 +997,61 @@ public class AddPostActivity extends BaseActivity {
             return;
         }
 
-        bottomNavigationView
-                .setOnItemSelectedListener(
-                        item -> {
+        bottomNavigationView.setOnNavigationItemSelectedListener(
+                item -> {
 
-                            if (item == null) {
-                                return false;
-                            }
+                    int id = item.getItemId();
 
-                            int id =
-                                    item.getItemId();
+                    if (id == R.id.nav_home) {
 
-                            if (id == R.id.nav_home) {
+                        startActivity(
+                                new Intent(
+                                        this,
+                                        HomeActivity.class
+                                )
+                        );
 
-                                startActivity(
-                                        new Intent(
-                                                AddPostActivity.this,
-                                                HomeActivity.class
-                                        )
-                                );
+                        finish();
 
-                                finish();
+                        return true;
 
-                                return true;
+                    } else if (id == R.id.nav_chats) {
 
-                            } else if (
-                                    id == R.id.nav_chats
-                            ) {
+                        startActivity(
+                                new Intent(
+                                        this,
+                                        ChatListActivity.class
+                                )
+                        );
 
-                                startActivity(
-                                        new Intent(
-                                                AddPostActivity.this,
-                                                ChatListActivity.class
-                                        )
-                                );
+                        finish();
 
-                                finish();
+                        return true;
 
-                                return true;
+                    } else if (id == R.id.nav_add) {
 
-                            } else if (
-                                    id == R.id.nav_add
-                            ) {
+                        return true;
 
-                                return true;
+                    } else if (id == R.id.nav_profile) {
 
-                            } else if (
-                                    id == R.id.nav_profile
-                            ) {
+                        startActivity(
+                                new Intent(
+                                        this,
+                                        ProfileActivity.class
+                                )
+                        );
 
-                                startActivity(
-                                        new Intent(
-                                                AddPostActivity.this,
-                                                ProfileActivity.class
-                                        )
-                                );
+                        finish();
 
-                                finish();
+                        return true;
+                    }
 
-                                return true;
-                            }
+                    return false;
+                }
+        );
 
-                            return false;
-                        }
-                );
-
-        bottomNavigationView
-                .setSelectedItemId(
-                        R.id.nav_add
-                );
-    }
-
-    private void showFatalInitializationError() {
-
-        Toast.makeText(
-                this,
-                "Could not initialize Add Service screen",
-                Toast.LENGTH_LONG
-        ).show();
-
-        finish();
-    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-
-        if (isFinishing() ||
-                isDestroyed()) {
-
-            return true;
-        }
-
-        getOnBackPressedDispatcher()
-                .onBackPressed();
-
-        return true;
+        bottomNavigationView.setSelectedItemId(
+                R.id.nav_add
+        );
     }
 }
