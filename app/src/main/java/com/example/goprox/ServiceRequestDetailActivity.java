@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -574,26 +575,26 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
                 showPrimaryButton(
                         "Accept",
-                        this::acceptRequest
+                        v -> acceptRequest()
                 );
 
                 showSecondaryButton(
                         "Reject",
-                        this::showRejectDialog
+                        v -> showRejectDialog()
                 );
 
             } else if (request.canProviderStart()) {
 
                 showPrimaryButton(
                         "Start Service",
-                        this::startRequest
+                        v -> startRequest()
                 );
 
             } else if (request.canProviderComplete()) {
 
                 showPrimaryButton(
                         "Complete Service",
-                        this::completeRequest
+                        v -> completeRequest()
                 );
             }
 
@@ -603,7 +604,7 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
                 showCancelButton(
                         "Cancel Request",
-                        this::showCancelDialog
+                        v -> showCancelDialog()
                 );
             }
         }

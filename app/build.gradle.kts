@@ -1,11 +1,11 @@
 import java.util.Properties
 import java.io.FileInputStream
 
-        plugins {
-            id("com.android.application")
-            id("com.google.gms.google-services")
-            id("com.google.firebase.crashlytics")
-        }
+plugins {
+    id("com.android.application")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+}
 
 android {
     namespace = "com.example.goprox"
@@ -107,6 +107,7 @@ dependencies {
     implementation("androidx.activity:activity:1.13.0")
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0")
 
     // =========================================================
     // Firebase BOM + services
