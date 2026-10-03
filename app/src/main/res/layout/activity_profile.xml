@@ -64,6 +64,17 @@
                 android:layout_marginBottom="24dp" />
 
             <Button
+                android:id="@+id/btnMyRequests"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="📋  My Requests"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/primary"
+                android:layout_marginBottom="12dp" />
+
+            <Button
                 android:id="@+id/btnEditProfile"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

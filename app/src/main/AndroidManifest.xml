@@ -14,7 +14,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Storage / Media access -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -25,8 +26,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Features (camera not required — app works without it) -->
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
 
     <application
         android:name=".MyApplication"
@@ -41,7 +46,7 @@
         <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBQDxEGXFLofhkse68O1BmN2dW4zTyW6DI" />
+            android:value="PUT_YOUR_EXISTING_GOOGLE_MAPS_API_KEY_HERE" />
 
         <!-- FileProvider for attachments -->
         <provider
@@ -49,6 +54,7 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
+
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
@@ -58,6 +64,7 @@
         <service
             android:name=".MyFirebaseMessagingService"
             android:exported="false">
+
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
@@ -67,19 +74,35 @@
         <activity
             android:name=".SplashActivity"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
 
         <!-- App Activities -->
-        <activity android:name=".MainActivity" android:exported="false" />
-        <activity android:name=".FullscreenImageActivity" android:exported="false"
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".FullscreenImageActivity"
+            android:exported="false"
             android:configChanges="orientation|screenSize" />
-        <activity android:name=".ComplaintActivity" android:exported="false" />
-        <activity android:name=".RegistrationActivity" android:exported="false" />
-        <activity android:name=".LoginActivity" android:exported="false" />
+
+        <activity
+            android:name=".ComplaintActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".RegistrationActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
 
         <activity
             android:name=".VerifyEmailActivity"
@@ -116,6 +139,7 @@
             android:name=".ServiceDetailActivity"
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
+
         <activity
             android:name=".AIDialogActivity"
             android:windowSoftInputMode="adjustResize"
@@ -148,8 +172,20 @@
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="false" />
+
         <activity
             android:name=".EditProfileActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Service Request Management -->
+        <activity
+            android:name=".ServiceRequestsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ServiceRequestDetailActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
