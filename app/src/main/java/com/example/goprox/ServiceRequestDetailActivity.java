@@ -5,28 +5,42 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
 
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class ServiceRequestDetailActivity extends BaseActivity {
 
     private Toolbar toolbar;
 
     private TextView tvServiceTitle;
+    private TextView tvRequestStatus;
+
     private TextView tvCustomer;
     private TextView tvProvider;
-    private TextView tvPrice;
-    private TextView tvMessage;
-    private TextView tvStatus;
+
+    private TextView tvRequestedPrice;
+    private TextView tvCustomerMessage;
+
+    private TextView tvTimelineRequested;
+    private TextView tvTimelineAccepted;
+    private TextView tvTimelineStarted;
+    private TextView tvTimelineCompleted;
+    private TextView tvTimelineRejected;
+    private TextView tvTimelineCancelled;
 
     private Button btnPrimary;
     private Button btnSecondary;
@@ -42,6 +56,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private boolean actionRunning = false;
 
+    private String serviceTitle = "Service";
+    private String customerName = "Customer";
+    private String providerName = "Provider";
+
     @Override
     protected void onCreate(
             @Nullable Bundle savedInstanceState
@@ -56,8 +74,7 @@ public class ServiceRequestDetailActivity extends BaseActivity {
         auth = FirebaseAuth.getInstance();
         repository = new ServiceRequestRepository();
 
-        FirebaseUser user =
-                auth.getCurrentUser();
+        FirebaseUser user = auth.getCurrentUser();
 
         if (user == null) {
             Toast.makeText(
@@ -70,10 +87,7 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             return;
         }
 
-        requestId =
-                getIntent().getStringExtra(
-                        "requestId"
-                );
+        requestId = getIntent().getStringExtra("requestId");
 
         if (requestId == null
                 || requestId.trim().isEmpty()) {
@@ -95,58 +109,56 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void initViews() {
 
-        toolbar =
-                findViewById(R.id.toolbar);
+        toolbar = findViewById(R.id.toolbar);
 
-        tvServiceTitle =
-                findViewById(
-                        R.id.tvServiceTitle
-                );
+        tvServiceTitle = findViewById(R.id.tvServiceTitle);
+        tvRequestStatus = findViewById(R.id.tvRequestStatus);
 
-        tvCustomer =
-                findViewById(
-                        R.id.tvCustomer
-                );
+        tvCustomer = findViewById(R.id.tvCustomer);
+        tvProvider = findViewById(R.id.tvProvider);
 
-        tvProvider =
-                findViewById(
-                        R.id.tvProvider
-                );
+        tvRequestedPrice = findViewById(
+                R.id.tvRequestedPrice
+        );
 
-        tvPrice =
-                findViewById(
-                        R.id.tvRequestedPrice
-                );
+        tvCustomerMessage = findViewById(
+                R.id.tvCustomerMessage
+        );
 
-        tvMessage =
-                findViewById(
-                        R.id.tvCustomerMessage
-                );
+        tvTimelineRequested = findViewById(
+                R.id.tvTimelineRequested
+        );
 
-        tvStatus =
-                findViewById(
-                        R.id.tvRequestStatus
-                );
+        tvTimelineAccepted = findViewById(
+                R.id.tvTimelineAccepted
+        );
 
-        btnPrimary =
-                findViewById(
-                        R.id.btnPrimary
-                );
+        tvTimelineStarted = findViewById(
+                R.id.tvTimelineStarted
+        );
 
-        btnSecondary =
-                findViewById(
-                        R.id.btnSecondary
-                );
+        tvTimelineCompleted = findViewById(
+                R.id.tvTimelineCompleted
+        );
 
-        btnCancel =
-                findViewById(
-                        R.id.btnCancel
-                );
+        tvTimelineRejected = findViewById(
+                R.id.tvTimelineRejected
+        );
+
+        tvTimelineCancelled = findViewById(
+                R.id.tvTimelineCancelled
+        );
+
+        btnPrimary = findViewById(R.id.btnPrimary);
+        btnSecondary = findViewById(R.id.btnSecondary);
+        btnCancel = findViewById(R.id.btnCancel);
     }
 
     private void setupToolbar() {
 
-        if (toolbar == null) return;
+        if (toolbar == null) {
+            return;
+        }
 
         setSupportActionBar(toolbar);
 
@@ -180,10 +192,9 @@ public class ServiceRequestDetailActivity extends BaseActivity {
                         return;
                     }
 
-                    request =
-                            snapshot.toObject(
-                                    ServiceRequest.class
-                            );
+                    request = snapshot.toObject(
+                            ServiceRequest.class
+                    );
 
                     if (request == null) {
 
@@ -197,87 +208,350 @@ public class ServiceRequestDetailActivity extends BaseActivity {
                         return;
                     }
 
-                    displayRequest();
+                    loadRelatedData();
+
                 })
                 .addOnFailureListener(e -> {
 
                     Toast.makeText(
                             this,
-                            "Failed to load request",
-                            Toast.LENGTH_SHORT
+                            getLoadError(e),
+                            Toast.LENGTH_LONG
                     ).show();
 
                     finish();
                 });
     }
 
-    private void displayRequest() {
+    private void loadRelatedData() {
 
-        if (request == null) return;
+        loadServiceTitle();
 
-        tvServiceTitle.setText(
-                "Service Request"
+        loadUserName(
+                request.getCustomerId(),
+                true
         );
 
-        tvCustomer.setText(
-                "Customer\n"
-                        + safeValue(
-                        request.getCustomerId()
-                )
+        loadUserName(
+                request.getProviderId(),
+                false
         );
 
-        tvProvider.setText(
-                "Provider\n"
-                        + safeValue(
-                        request.getProviderId()
-                )
-        );
+        displayRequest();
+    }
 
-        String price =
-                safeValue(
-                        request.getRequestedPrice()
-                );
+    private void loadServiceTitle() {
 
-        if (request.getPriceType() != null
-                && !request.getPriceType()
-                .trim()
-                .isEmpty()) {
+        String serviceId = request.getServiceId();
 
-            price += " / "
-                    + request.getPriceType();
+        if (serviceId == null
+                || serviceId.trim().isEmpty()) {
+            return;
         }
 
-        tvPrice.setText(price);
+        db.collection("services")
+                .document(serviceId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
 
-        String message =
-                request.getMessage();
+                    if (snapshot != null
+                            && snapshot.exists()) {
+
+                        String title = snapshot.getString(
+                                "name"
+                        );
+
+                        if (title == null
+                                || title.trim().isEmpty()) {
+
+                            title = snapshot.getString(
+                                    "title"
+                            );
+                        }
+
+                        if (title != null
+                                && !title.trim().isEmpty()) {
+
+                            serviceTitle = title.trim();
+
+                            if (tvServiceTitle != null) {
+                                tvServiceTitle.setText(
+                                        serviceTitle
+                                );
+                            }
+                        }
+                    }
+                });
+    }
+
+    private void loadUserName(
+            String uid,
+            boolean customer
+    ) {
+
+        if (uid == null
+                || uid.trim().isEmpty()) {
+            return;
+        }
+
+        db.collection("users")
+                .document(uid)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+
+                    if (snapshot == null
+                            || !snapshot.exists()) {
+                        return;
+                    }
+
+                    String name = getUserDisplayName(
+                            snapshot
+                    );
+
+                    if (customer) {
+                        customerName = name;
+
+                        if (tvCustomer != null) {
+                            tvCustomer.setText(
+                                    customerName
+                            );
+                        }
+                    } else {
+                        providerName = name;
+
+                        if (tvProvider != null) {
+                            tvProvider.setText(
+                                    providerName
+                            );
+                        }
+                    }
+                });
+    }
+
+    private String getUserDisplayName(
+            DocumentSnapshot snapshot
+    ) {
+
+        String name = snapshot.getString("name");
+
+        if (name == null
+                || name.trim().isEmpty()) {
+
+            name = snapshot.getString("displayName");
+        }
+
+        if (name == null
+                || name.trim().isEmpty()) {
+
+            name = snapshot.getString("fullName");
+        }
+
+        if (name == null
+                || name.trim().isEmpty()) {
+
+            return "Unknown user";
+        }
+
+        return name.trim();
+    }
+
+    private void displayRequest() {
+
+        if (request == null) {
+            return;
+        }
+
+        tvServiceTitle.setText(serviceTitle);
+
+        tvCustomer.setText(customerName);
+        tvProvider.setText(providerName);
+
+        String price = safeValue(
+                request.getRequestedPrice()
+        );
+
+        String priceType = request.getPriceType();
+
+        if (priceType != null
+                && !priceType.trim().isEmpty()) {
+
+            price += " / " + priceType.trim();
+        }
+
+        tvRequestedPrice.setText(price);
+
+        String message = request.getMessage();
 
         if (message == null
                 || message.trim().isEmpty()) {
 
-            tvMessage.setText(
+            tvCustomerMessage.setText(
                     "No message provided."
             );
 
         } else {
-            tvMessage.setText(
+
+            tvCustomerMessage.setText(
                     message.trim()
             );
         }
 
-        tvStatus.setText(
-                getStatusLabel(
-                        request.getStatus()
-                )
+        updateStatusUI();
+        updateTimeline();
+        setupActions();
+    }
+
+    private void updateStatusUI() {
+
+        String status = request.getStatus();
+
+        tvRequestStatus.setText(
+                getStatusLabel(status)
         );
 
-        setupActions();
+        if (ServiceRequest.STATUS_REQUESTED.equals(status)) {
+
+            tvRequestStatus.setTextColor(
+                    getColorSafe(R.color.yellow)
+            );
+
+        } else if (
+                ServiceRequest.STATUS_COMPLETED.equals(status)
+        ) {
+
+            tvRequestStatus.setTextColor(
+                    getColorSafe(R.color.green)
+            );
+
+        } else if (
+                ServiceRequest.STATUS_REJECTED.equals(status)
+        ) {
+
+            tvRequestStatus.setTextColor(
+                    getColorSafe(R.color.red)
+            );
+
+        } else if (
+                ServiceRequest.STATUS_CANCELLED.equals(status)
+        ) {
+
+            tvRequestStatus.setTextColor(
+                    getColorSafe(R.color.gray)
+            );
+
+        } else {
+
+            tvRequestStatus.setTextColor(
+                    getColorSafe(R.color.primary)
+            );
+        }
+    }
+
+    private void updateTimeline() {
+
+        setTimelineText(
+                tvTimelineRequested,
+                "Request sent",
+                request.getCreatedAt(),
+                true
+        );
+
+        setTimelineText(
+                tvTimelineAccepted,
+                "Request accepted",
+                request.getAcceptedAt(),
+                false
+        );
+
+        setTimelineText(
+                tvTimelineStarted,
+                "Service started",
+                request.getStartedAt(),
+                false
+        );
+
+        setTimelineText(
+                tvTimelineCompleted,
+                "Service completed",
+                request.getCompletedAt(),
+                false
+        );
+
+        setTimelineText(
+                tvTimelineRejected,
+                "Request rejected",
+                request.getRejectedAt(),
+                false
+        );
+
+        setTimelineText(
+                tvTimelineCancelled,
+                "Request cancelled",
+                request.getCancelledAt(),
+                false
+        );
+    }
+
+    private void setTimelineText(
+            TextView view,
+            String label,
+            Timestamp timestamp,
+            boolean alwaysVisible
+    ) {
+
+        if (view == null) {
+            return;
+        }
+
+        if (timestamp == null) {
+
+            if (alwaysVisible) {
+                view.setText(
+                        "• " + label + "\n" +
+                                "   Time unavailable"
+                );
+
+                view.setVisibility(View.VISIBLE);
+
+            } else {
+
+                view.setVisibility(View.GONE);
+            }
+
+            return;
+        }
+
+        view.setText(
+                "• " + label + "\n" +
+                        "   " + formatTimestamp(timestamp)
+        );
+
+        view.setVisibility(View.VISIBLE);
+    }
+
+    private String formatTimestamp(
+            Timestamp timestamp
+    ) {
+
+        if (timestamp == null) {
+            return "Unknown time";
+        }
+
+        Date date = timestamp.toDate();
+
+        DateFormat formatter =
+                DateFormat.getDateTimeInstance(
+                        DateFormat.MEDIUM,
+                        DateFormat.SHORT,
+                        Locale.getDefault()
+                );
+
+        return formatter.format(date);
     }
 
     private void setupActions() {
 
-        FirebaseUser user =
-                auth.getCurrentUser();
+        FirebaseUser user = auth.getCurrentUser();
 
         if (user == null
                 || request == null) {
@@ -287,14 +561,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
         String uid = user.getUid();
 
         boolean isProvider =
-                uid.equals(
-                        request.getProviderId()
-                );
+                uid.equals(request.getProviderId());
 
         boolean isCustomer =
-                uid.equals(
-                        request.getCustomerId()
-                );
+                uid.equals(request.getCustomerId());
 
         hideAllActionButtons();
 
@@ -343,7 +613,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void acceptRequest() {
 
-        if (actionRunning || request == null) return;
+        if (actionRunning
+                || request == null) {
+            return;
+        }
 
         runAction(
                 "Accepting...",
@@ -355,7 +628,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void startRequest() {
 
-        if (actionRunning || request == null) return;
+        if (actionRunning
+                || request == null) {
+            return;
+        }
 
         runAction(
                 "Starting...",
@@ -367,7 +643,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void completeRequest() {
 
-        if (actionRunning || request == null) return;
+        if (actionRunning
+                || request == null) {
+            return;
+        }
 
         runAction(
                 "Completing...",
@@ -379,7 +658,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void showRejectDialog() {
 
-        if (actionRunning || request == null) return;
+        if (actionRunning
+                || request == null) {
+            return;
+        }
 
         final EditText input =
                 new EditText(this);
@@ -396,13 +678,11 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
         input.setMinLines(3);
 
-        int padding =
-                (int) (
-                        20
-                                * getResources()
-                                .getDisplayMetrics()
-                                .density
-                );
+        int padding = (int) (
+                16 * getResources()
+                        .getDisplayMetrics()
+                        .density
+        );
 
         input.setPadding(
                 padding,
@@ -414,8 +694,8 @@ public class ServiceRequestDetailActivity extends BaseActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Reject Request")
                 .setMessage(
-                        "You can optionally explain why "
-                                + "you are rejecting this request."
+                        "You can optionally explain why " +
+                                "you are rejecting this request."
                 )
                 .setView(input)
                 .setNegativeButton(
@@ -457,7 +737,10 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
     private void showCancelDialog() {
 
-        if (actionRunning || request == null) return;
+        if (actionRunning
+                || request == null) {
+            return;
+        }
 
         final EditText input =
                 new EditText(this);
@@ -474,11 +757,24 @@ public class ServiceRequestDetailActivity extends BaseActivity {
 
         input.setMinLines(3);
 
+        int padding = (int) (
+                16 * getResources()
+                        .getDisplayMetrics()
+                        .density
+        );
+
+        input.setPadding(
+                padding,
+                padding,
+                padding,
+                padding
+        );
+
         new AlertDialog.Builder(this)
                 .setTitle("Cancel Request")
                 .setMessage(
-                        "Are you sure you want to cancel "
-                                + "this request?"
+                        "Are you sure you want to cancel " +
+                                "this request?"
                 )
                 .setView(input)
                 .setNegativeButton(
@@ -519,7 +815,7 @@ public class ServiceRequestDetailActivity extends BaseActivity {
     }
 
     private interface RequestAction {
-        com.google.android.gms.tasks.Task<Void> run();
+        Task<Void> run();
     }
 
     private void runAction(
@@ -570,8 +866,7 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             return "Action failed";
         }
 
-        String message =
-                e.getMessage();
+        String message = e.getMessage();
 
         if (message == null
                 || message.trim().isEmpty()) {
@@ -591,6 +886,26 @@ public class ServiceRequestDetailActivity extends BaseActivity {
         }
 
         return "Action failed";
+    }
+
+    private String getLoadError(
+            Exception e
+    ) {
+
+        if (e == null) {
+            return "Failed to load request";
+        }
+
+        String message = e.getMessage();
+
+        if (message != null
+                && message.contains(
+                "PERMISSION_DENIED"
+        )) {
+            return "You are not allowed to view this request";
+        }
+
+        return "Failed to load request";
     }
 
     private void hideAllActionButtons() {
@@ -619,8 +934,14 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             View.OnClickListener listener
     ) {
 
+        if (btnPrimary == null) {
+            return;
+        }
+
         btnPrimary.setText(text);
-        btnPrimary.setVisibility(View.VISIBLE);
+        btnPrimary.setVisibility(
+                View.VISIBLE
+        );
         btnPrimary.setOnClickListener(listener);
     }
 
@@ -629,8 +950,14 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             View.OnClickListener listener
     ) {
 
+        if (btnSecondary == null) {
+            return;
+        }
+
         btnSecondary.setText(text);
-        btnSecondary.setVisibility(View.VISIBLE);
+        btnSecondary.setVisibility(
+                View.VISIBLE
+        );
         btnSecondary.setOnClickListener(listener);
     }
 
@@ -639,8 +966,14 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             View.OnClickListener listener
     ) {
 
+        if (btnCancel == null) {
+            return;
+        }
+
         btnCancel.setText(text);
-        btnCancel.setVisibility(View.VISIBLE);
+        btnCancel.setVisibility(
+                View.VISIBLE
+        );
         btnCancel.setOnClickListener(listener);
     }
 
@@ -672,7 +1005,23 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             btnPrimary.setText(text);
         }
 
-        setActionButtonsEnabled(false);
+        if (btnSecondary != null
+                && btnSecondary.getVisibility()
+                == View.VISIBLE) {
+
+            btnSecondary.setEnabled(false);
+        }
+
+        if (btnCancel != null
+                && btnCancel.getVisibility()
+                == View.VISIBLE) {
+
+            btnCancel.setEnabled(false);
+        }
+
+        if (btnPrimary != null) {
+            btnPrimary.setEnabled(false);
+        }
     }
 
     private String getStatusLabel(
@@ -680,40 +1029,52 @@ public class ServiceRequestDetailActivity extends BaseActivity {
     ) {
 
         if (ServiceRequest.STATUS_REQUESTED.equals(status)) {
-            return "🟡 Waiting for response";
+            return "●  Waiting for response";
         }
 
         if (ServiceRequest.STATUS_ACCEPTED.equals(status)) {
-            return "🔵 Accepted";
+            return "●  Accepted";
         }
 
         if (ServiceRequest.STATUS_IN_PROGRESS.equals(status)) {
-            return "🔵 Service in progress";
+            return "●  Service in progress";
         }
 
         if (ServiceRequest.STATUS_COMPLETED.equals(status)) {
-            return "🟢 Completed";
+            return "●  Completed";
         }
 
         if (ServiceRequest.STATUS_REJECTED.equals(status)) {
-            return "🔴 Rejected";
+            return "●  Rejected";
         }
 
         if (ServiceRequest.STATUS_CANCELLED.equals(status)) {
-            return "⚪ Cancelled";
+            return "●  Cancelled";
         }
 
-        return "Unknown status";
+        return "●  Unknown status";
     }
 
-    private String safeValue(String value) {
+    private String safeValue(
+            String value
+    ) {
 
         if (value == null
                 || value.trim().isEmpty()) {
-            return "Unknown";
+            return "Not specified";
         }
 
         return value.trim();
+    }
+
+    private int getColorSafe(
+            int colorRes
+    ) {
+
+        return getResources().getColor(
+                colorRes,
+                getTheme()
+        );
     }
 
     @Override
