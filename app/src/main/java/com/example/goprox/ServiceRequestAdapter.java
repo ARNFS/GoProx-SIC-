@@ -1,15 +1,22 @@
 package com.example.goprox;
 
-import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
+import com.google.android.material.card.MaterialCardView;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public class ServiceRequestAdapter
         extends RecyclerView.Adapter<ServiceRequestAdapter.ViewHolder> {
@@ -18,23 +25,27 @@ public class ServiceRequestAdapter
         void onRequestClick(ServiceRequest request);
     }
 
-    private final List<ServiceRequest> requestList;
+    private final List<ServiceRequest> requests;
+    private final Map<String, String> serviceNames;
+    private final Map<String, String> serviceImages;
+    private final Map<String, String> userNames;
+    private final Map<String, String> userPhotos;
     private final OnRequestClickListener listener;
 
-    private boolean incomingMode;
-
     public ServiceRequestAdapter(
-            List<ServiceRequest> requestList,
-            boolean incomingMode,
+            List<ServiceRequest> requests,
+            Map<String, String> serviceNames,
+            Map<String, String> serviceImages,
+            Map<String, String> userNames,
+            Map<String, String> userPhotos,
             OnRequestClickListener listener
     ) {
-        this.requestList = requestList;
-        this.incomingMode = incomingMode;
+        this.requests = requests;
+        this.serviceNames = serviceNames;
+        this.serviceImages = serviceImages;
+        this.userNames = userNames;
+        this.userPhotos = userPhotos;
         this.listener = listener;
-    }
-
-    public void setIncomingMode(boolean incomingMode) {
-        this.incomingMode = incomingMode;
     }
 
     @NonNull
@@ -43,7 +54,6 @@ public class ServiceRequestAdapter
             @NonNull ViewGroup parent,
             int viewType
     ) {
-
         View view = LayoutInflater.from(
                 parent.getContext()
         ).inflate(
@@ -60,44 +70,50 @@ public class ServiceRequestAdapter
             @NonNull ViewHolder holder,
             int position
     ) {
-
-        if (position < 0
-                || position >= requestList.size()) {
-            return;
-        }
-
         ServiceRequest request =
-                requestList.get(position);
+                requests.get(position);
 
-        if (request == null) return;
+        String serviceId =
+                request.getServiceId();
 
-        String status = request.getStatus();
+        String otherUserId =
+                getOtherUserId(request);
 
-        holder.tvServiceTitle.setText(
-                "Service Request"
+        String serviceName =
+                serviceNames.get(serviceId);
+
+        String userName =
+                userNames.get(otherUserId);
+
+        String serviceImage =
+                serviceImages.get(serviceId);
+
+        String userPhoto =
+                userPhotos.get(otherUserId);
+
+        holder.tvServiceName.setText(
+                serviceName != null
+                        ? serviceName
+                        : "Service"
         );
 
-        String personText;
-
-        if (incomingMode) {
-            personText =
-                    "Customer: "
-                            + safeId(request.getCustomerId());
-        } else {
-            personText =
-                    "Provider: "
-                            + safeId(request.getProviderId());
-        }
-
-        holder.tvPerson.setText(personText);
+        holder.tvUserName.setText(
+                userName != null
+                        ? userName
+                        : "User"
+        );
 
         String message = request.getMessage();
 
-        if (message == null || message.trim().isEmpty()) {
+        if (message == null
+                || message.trim().isEmpty()) {
+
             holder.tvMessage.setText(
-                    "No message provided"
+                    "No message"
             );
+
         } else {
+
             holder.tvMessage.setText(
                     "“" + message.trim() + "”"
             );
@@ -106,155 +122,236 @@ public class ServiceRequestAdapter
         String price =
                 request.getRequestedPrice();
 
+        String priceType =
+                request.getPriceType();
+
         if (price == null || price.trim().isEmpty()) {
-            price = "Price not specified";
+            holder.tvPrice.setText(
+                    "Price not specified"
+            );
         } else {
-            String priceType =
-                    request.getPriceType();
+
+            String formattedPrice =
+                    price.trim() + " ֏";
 
             if (priceType != null
                     && !priceType.trim().isEmpty()) {
-                price += " / " + priceType;
+
+                formattedPrice +=
+                        " · " + priceType.trim();
             }
+
+            holder.tvPrice.setText(
+                    formattedPrice
+            );
         }
 
-        holder.tvPrice.setText(price);
-
         holder.tvStatus.setText(
-                getStatusLabel(status)
+                getStatusText(request.getStatus())
         );
-
-        int statusColor =
-                getStatusColor(status);
 
         holder.tvStatus.setTextColor(
-                statusColor
+                holder.itemView.getContext()
+                        .getColor(
+                                getStatusColor(
+                                        request.getStatus()
+                                )
+                        )
         );
 
-        holder.itemView.setOnClickListener(v -> {
+        holder.tvDate.setText(
+                formatTimestamp(
+                        request.getUpdatedAt(),
+                        request.getCreatedAt()
+                )
+        );
 
-            if (listener != null) {
-                listener.onRequestClick(request);
-            }
-        });
+        Glide.with(holder.itemView.getContext())
+                .load(
+                        userPhoto != null
+                                && !userPhoto.isEmpty()
+                                ? userPhoto
+                                : R.drawable.ic_profile_placeholder
+                )
+                .placeholder(
+                        R.drawable.ic_profile_placeholder
+                )
+                .error(
+                        R.drawable.ic_profile_placeholder
+                )
+                .circleCrop()
+                .into(holder.ivAvatar);
+
+        holder.card.setOnClickListener(
+                v -> {
+                    if (listener != null) {
+                        listener.onRequestClick(
+                                request
+                        );
+                    }
+                }
+        );
     }
 
-    private String safeId(String id) {
+    private String getOtherUserId(
+            ServiceRequest request
+    ) {
+        if (request == null) {
+            return null;
+        }
 
-        if (id == null || id.trim().isEmpty()) {
+        // The adapter doesn't know the current user directly.
+        // Prefer customer as the visible party for incoming
+        // requests and provider for sent requests.
+        //
+        // The Activity's maps contain only the relevant user.
+        if (userNames.containsKey(
+                request.getCustomerId()
+        )) {
+            return request.getCustomerId();
+        }
+
+        return request.getProviderId();
+    }
+
+    private String getStatusText(String status) {
+
+        if (status == null) {
             return "Unknown";
         }
 
-        String value = id.trim();
+        switch (status) {
 
-        if (value.length() <= 12) {
-            return value;
+            case ServiceRequest.STATUS_REQUESTED:
+                return "Pending";
+
+            case ServiceRequest.STATUS_ACCEPTED:
+                return "Accepted";
+
+            case ServiceRequest.STATUS_IN_PROGRESS:
+                return "In progress";
+
+            case ServiceRequest.STATUS_COMPLETED:
+                return "Completed";
+
+            case ServiceRequest.STATUS_REJECTED:
+                return "Rejected";
+
+            case ServiceRequest.STATUS_CANCELLED:
+                return "Cancelled";
+
+            default:
+                return "Unknown";
         }
-
-        return value.substring(0, 12) + "…";
-    }
-
-    private String getStatusLabel(String status) {
-
-        if (ServiceRequest.STATUS_REQUESTED.equals(status)) {
-            return "● Waiting for response";
-        }
-
-        if (ServiceRequest.STATUS_ACCEPTED.equals(status)) {
-            return "● Accepted";
-        }
-
-        if (ServiceRequest.STATUS_IN_PROGRESS.equals(status)) {
-            return "● In progress";
-        }
-
-        if (ServiceRequest.STATUS_COMPLETED.equals(status)) {
-            return "● Completed";
-        }
-
-        if (ServiceRequest.STATUS_REJECTED.equals(status)) {
-            return "● Rejected";
-        }
-
-        if (ServiceRequest.STATUS_CANCELLED.equals(status)) {
-            return "● Cancelled";
-        }
-
-        return "● Unknown";
     }
 
     private int getStatusColor(String status) {
 
-        if (ServiceRequest.STATUS_REQUESTED.equals(status)) {
-            return Color.rgb(249, 168, 37);
+        if (status == null) {
+            return R.color.gray;
         }
 
-        if (ServiceRequest.STATUS_ACCEPTED.equals(status)) {
-            return Color.rgb(21, 101, 192);
+        switch (status) {
+
+            case ServiceRequest.STATUS_REQUESTED:
+                return R.color.yellow;
+
+            case ServiceRequest.STATUS_ACCEPTED:
+                return R.color.blue;
+
+            case ServiceRequest.STATUS_IN_PROGRESS:
+                return R.color.primary;
+
+            case ServiceRequest.STATUS_COMPLETED:
+                return R.color.green;
+
+            case ServiceRequest.STATUS_REJECTED:
+            case ServiceRequest.STATUS_CANCELLED:
+                return R.color.red;
+
+            default:
+                return R.color.gray;
+        }
+    }
+
+    private String formatTimestamp(
+            com.google.firebase.Timestamp updatedAt,
+            com.google.firebase.Timestamp createdAt
+    ) {
+        com.google.firebase.Timestamp timestamp =
+                updatedAt != null
+                        ? updatedAt
+                        : createdAt;
+
+        if (timestamp == null) {
+            return "Recently";
         }
 
-        if (ServiceRequest.STATUS_IN_PROGRESS.equals(status)) {
-            return Color.rgb(21, 101, 192);
-        }
+        Date date =
+                timestamp.toDate();
 
-        if (ServiceRequest.STATUS_COMPLETED.equals(status)) {
-            return Color.rgb(46, 125, 50);
-        }
+        SimpleDateFormat format =
+                new SimpleDateFormat(
+                        "MMM d · HH:mm",
+                        Locale.getDefault()
+                );
 
-        if (ServiceRequest.STATUS_REJECTED.equals(status)) {
-            return Color.rgb(198, 40, 40);
-        }
-
-        if (ServiceRequest.STATUS_CANCELLED.equals(status)) {
-            return Color.rgb(97, 97, 97);
-        }
-
-        return Color.rgb(97, 97, 97);
+        return format.format(date);
     }
 
     @Override
     public int getItemCount() {
-        return requestList != null
-                ? requestList.size()
-                : 0;
+        return requests.size();
     }
 
     static class ViewHolder
             extends RecyclerView.ViewHolder {
 
-        TextView tvServiceTitle;
-        TextView tvPerson;
+        MaterialCardView card;
+
+        ImageView ivAvatar;
+
+        TextView tvServiceName;
+        TextView tvUserName;
         TextView tvMessage;
         TextView tvPrice;
         TextView tvStatus;
+        TextView tvDate;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
 
-            tvServiceTitle =
-                    itemView.findViewById(
-                            R.id.tvRequestServiceTitle
-                    );
+            card = itemView.findViewById(
+                    R.id.cardRequest
+            );
 
-            tvPerson =
-                    itemView.findViewById(
-                            R.id.tvRequestPerson
-                    );
+            ivAvatar = itemView.findViewById(
+                    R.id.ivAvatar
+            );
 
-            tvMessage =
-                    itemView.findViewById(
-                            R.id.tvRequestMessage
-                    );
+            tvServiceName = itemView.findViewById(
+                    R.id.tvServiceName
+            );
 
-            tvPrice =
-                    itemView.findViewById(
-                            R.id.tvRequestPrice
-                    );
+            tvUserName = itemView.findViewById(
+                    R.id.tvUserName
+            );
 
-            tvStatus =
-                    itemView.findViewById(
-                            R.id.tvRequestStatus
-                    );
+            tvMessage = itemView.findViewById(
+                    R.id.tvMessage
+            );
+
+            tvPrice = itemView.findViewById(
+                    R.id.tvPrice
+            );
+
+            tvStatus = itemView.findViewById(
+                    R.id.tvStatus
+            );
+
+            tvDate = itemView.findViewById(
+                    R.id.tvDate
+            );
         }
     }
 }
