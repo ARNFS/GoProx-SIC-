@@ -15,16 +15,15 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+
     // =========================================================
     // USERS
     // =========================================================
 
     match /users/{userId} {
 
-      // Current app needs authenticated users to read profiles.
       allow read: if signedIn();
 
-      // User can create only his own profile.
       allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.keys().hasOnly([
@@ -52,9 +51,6 @@ service cloud.firestore {
           || request.resource.data.fcmToken is string
         );
 
-      // User may update only his own profile.
-      // No ownership transfer.
-      // No arbitrary new fields.
       allow update: if signedIn()
         && request.auth.uid == userId
         && resource.data.uid == request.auth.uid
@@ -82,16 +78,15 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
+
     // =========================================================
     // SERVICES
     // =========================================================
 
     match /services/{serviceId} {
 
-      // Authenticated users can browse services.
       allow read: if signedIn();
 
-      // Create service only for yourself.
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "name",
@@ -122,45 +117,34 @@ service cloud.firestore {
           "imageUrl"
         ])
         && request.resource.data.userId == request.auth.uid
-
         && request.resource.data.name is string
         && request.resource.data.profession is string
         && request.resource.data.description is string
         && request.resource.data.price is string
         && request.resource.data.priceType is string
-
         && request.resource.data.rating is number
         && request.resource.data.rating >= 0
         && request.resource.data.rating <= 5
-
         && request.resource.data.ratingCount is int
         && request.resource.data.ratingCount >= 0
-
         && request.resource.data.tags is list
         && request.resource.data.createdAt is int
-
         && (
           request.resource.data.imageUrl == null
           || request.resource.data.imageUrl is string
         )
-
         && (
           !request.resource.data.keys().hasAny(["country"])
           || request.resource.data.country is string
         )
-
         && (
           !request.resource.data.keys().hasAny(["city"])
           || request.resource.data.city is string
         );
 
-      // Only the service owner can update.
-      // UserId cannot be changed.
-      // No arbitrary field injection.
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.userId == resource.data.userId
-
         && request.resource.data.keys().hasOnly([
           "name",
           "profession",
@@ -177,38 +161,30 @@ service cloud.firestore {
           "city",
           "updatedAt"
         ])
-
         && request.resource.data.name is string
         && request.resource.data.profession is string
         && request.resource.data.description is string
         && request.resource.data.price is string
         && request.resource.data.priceType is string
-
         && request.resource.data.rating is number
         && request.resource.data.rating >= 0
         && request.resource.data.rating <= 5
-
         && request.resource.data.ratingCount is int
         && request.resource.data.ratingCount >= 0
-
         && request.resource.data.tags is list
         && request.resource.data.createdAt is int
-
         && (
           request.resource.data.imageUrl == null
           || request.resource.data.imageUrl is string
         )
-
         && (
           !request.resource.data.keys().hasAny(["country"])
           || request.resource.data.country is string
         )
-
         && (
           !request.resource.data.keys().hasAny(["city"])
           || request.resource.data.city is string
         )
-
         && (
           !request.resource.data.keys().hasAny(["updatedAt"])
           || request.resource.data.updatedAt is int
@@ -216,6 +192,7 @@ service cloud.firestore {
 
       allow delete: if signedIn()
         && resource.data.userId == request.auth.uid;
+
 
       // =======================================================
       // REVIEWS
@@ -225,9 +202,6 @@ service cloud.firestore {
 
         allow read: if signedIn();
 
-        // Review must come from the authenticated user.
-        // Cannot review your own service.
-        // Exact fields only.
         allow create: if signedIn()
           && request.resource.data.keys().hasOnly([
             "userId",
@@ -248,7 +222,6 @@ service cloud.firestore {
              get(
                /databases/$(database)/documents/services/$(serviceId)
              ).data.userId
-
           && request.resource.data.userName is string
           && request.resource.data.rating is number
           && request.resource.data.rating >= 1
@@ -256,7 +229,6 @@ service cloud.firestore {
           && request.resource.data.comment is string
           && request.resource.data.timestamp is int;
 
-        // A reviewer may edit only his own review.
         allow update: if signedIn()
           && resource.data.userId == request.auth.uid
           && request.resource.data.userId == resource.data.userId
@@ -279,28 +251,48 @@ service cloud.firestore {
       }
     }
 
+
     // =========================================================
-    // SERVICE REQUESTS / TRANSACTION LIFECYCLE
+    // CHAT ACCESS CONTROL
+    // =========================================================
+    //
+    // IMPORTANT:
+    //
+    // These documents are server-managed.
+    //
+    // ensureChatParticipant Cloud Function uses Admin SDK
+    // to create them.
+    //
+    // Client users have NO direct read/write access.
+    //
+    // Cloud Storage Rules use `exists()` against these docs
+    // to authorize chat attachments.
+    //
+
+    match /chatAccess/{chatId}/participants/{userId} {
+
+      allow read, write: if false;
+    }
+
+
+    // =========================================================
+    // SERVICE REQUESTS
     // =========================================================
 
     match /serviceRequests/{requestId} {
 
-      // Only customer or provider can read the request.
       allow read: if signedIn()
         && (
           resource.data.customerId == request.auth.uid
           || resource.data.providerId == request.auth.uid
         );
 
+
       // -------------------------------------------------------
       // CREATE
-      //
-      // New lifecycle:
-      // REQUESTED
       // -------------------------------------------------------
 
       allow create: if signedIn()
-
         && request.resource.data.keys().hasOnly([
           "requestId",
           "serviceId",
@@ -313,7 +305,6 @@ service cloud.firestore {
           "createdAt",
           "updatedAt"
         ])
-
         && request.resource.data.keys().hasAll([
           "requestId",
           "serviceId",
@@ -326,9 +317,7 @@ service cloud.firestore {
           "createdAt",
           "updatedAt"
         ])
-
         && request.resource.data.requestId == requestId
-
         && request.resource.data.serviceId is string
         && request.resource.data.customerId is string
         && request.resource.data.providerId is string
@@ -336,58 +325,45 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.requestedPrice is string
         && request.resource.data.priceType is string
-
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.customerId != request.resource.data.providerId
-
-        // Provider must actually own the service.
         && get(
              /databases/$(database)/documents/services/$(request.resource.data.serviceId)
            ).data.userId == request.resource.data.providerId
-
-        // Must be server timestamps.
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
+
       // -------------------------------------------------------
       // REQUESTED -> ACCEPTED
-      //
-      // Provider only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.providerId == request.auth.uid
-
         && resource.data.status == "requested"
         && request.resource.data.status == "accepted"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
                "acceptedAt",
                "updatedAt"
              ])
-
         && request.resource.data.acceptedAt is timestamp
         && request.resource.data.acceptedAt == request.time
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time;
 
+
       // -------------------------------------------------------
       // REQUESTED -> REJECTED
-      //
-      // Provider only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.providerId == request.auth.uid
-
         && resource.data.status == "requested"
         && request.resource.data.status == "rejected"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
@@ -395,30 +371,24 @@ service cloud.firestore {
                "rejectionReason",
                "updatedAt"
              ])
-
         && request.resource.data.rejectedAt is timestamp
         && request.resource.data.rejectedAt == request.time
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time
-
         && (
           !request.resource.data.keys().hasAny(["rejectionReason"])
           || request.resource.data.rejectionReason is string
         );
 
+
       // -------------------------------------------------------
       // REQUESTED -> CANCELLED
-      //
-      // Customer only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.customerId == request.auth.uid
-
         && resource.data.status == "requested"
         && request.resource.data.status == "cancelled"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
@@ -427,58 +397,46 @@ service cloud.firestore {
                "cancellationReason",
                "updatedAt"
              ])
-
         && request.resource.data.cancelledAt is timestamp
         && request.resource.data.cancelledAt == request.time
-
         && request.resource.data.cancelledBy is string
         && request.resource.data.cancelledBy == request.auth.uid
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time
-
         && (
           !request.resource.data.keys().hasAny(["cancellationReason"])
           || request.resource.data.cancellationReason is string
         );
 
+
       // -------------------------------------------------------
       // ACCEPTED -> IN_PROGRESS
-      //
-      // Provider only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.providerId == request.auth.uid
-
         && resource.data.status == "accepted"
         && request.resource.data.status == "in_progress"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
                "startedAt",
                "updatedAt"
              ])
-
         && request.resource.data.startedAt is timestamp
         && request.resource.data.startedAt == request.time
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time;
 
+
       // -------------------------------------------------------
       // ACCEPTED -> CANCELLED
-      //
-      // Customer only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.customerId == request.auth.uid
-
         && resource.data.status == "accepted"
         && request.resource.data.status == "cancelled"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
@@ -487,58 +445,46 @@ service cloud.firestore {
                "cancellationReason",
                "updatedAt"
              ])
-
         && request.resource.data.cancelledAt is timestamp
         && request.resource.data.cancelledAt == request.time
-
         && request.resource.data.cancelledBy is string
         && request.resource.data.cancelledBy == request.auth.uid
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time
-
         && (
           !request.resource.data.keys().hasAny(["cancellationReason"])
           || request.resource.data.cancellationReason is string
         );
 
+
       // -------------------------------------------------------
       // IN_PROGRESS -> COMPLETED
-      //
-      // Provider only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.providerId == request.auth.uid
-
         && resource.data.status == "in_progress"
         && request.resource.data.status == "completed"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
                "completedAt",
                "updatedAt"
              ])
-
         && request.resource.data.completedAt is timestamp
         && request.resource.data.completedAt == request.time
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time;
 
+
       // -------------------------------------------------------
       // IN_PROGRESS -> CANCELLED
-      //
-      // Customer only.
       // -------------------------------------------------------
 
       allow update: if signedIn()
         && resource.data.customerId == request.auth.uid
-
         && resource.data.status == "in_progress"
         && request.resource.data.status == "cancelled"
-
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
                "status",
@@ -547,24 +493,21 @@ service cloud.firestore {
                "cancellationReason",
                "updatedAt"
              ])
-
         && request.resource.data.cancelledAt is timestamp
         && request.resource.data.cancelledAt == request.time
-
         && request.resource.data.cancelledBy is string
         && request.resource.data.cancelledBy == request.auth.uid
-
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedAt == request.time
-
         && (
           !request.resource.data.keys().hasAny(["cancellationReason"])
           || request.resource.data.cancellationReason is string
         );
 
-      // No direct deletion by clients.
+
       allow delete: if false;
     }
+
 
     // =========================================================
     // CALLS
@@ -572,16 +515,15 @@ service cloud.firestore {
 
     match /calls/{callId} {
 
-      // Only caller or callee can read a call document.
       allow read: if signedIn()
         && (
           resource.data.callerId == request.auth.uid
           || resource.data.calleeId == request.auth.uid
         );
 
+
       // -------------------------------------------------------
-      // Incoming-call document
-      //
+      // INCOMING CALL
       // /calls/{calleeUid}
       // -------------------------------------------------------
 
@@ -589,7 +531,6 @@ service cloud.firestore {
         && callId == request.resource.data.calleeId
         && request.resource.data.callerId == request.auth.uid
         && request.resource.data.calleeId != request.auth.uid
-
         && request.resource.data.keys().hasOnly([
           "callId",
           "callerId",
@@ -600,7 +541,6 @@ service cloud.firestore {
           "serviceTitle",
           "status"
         ])
-
         && request.resource.data.callId is string
         && request.resource.data.callerId is string
         && request.resource.data.calleeId is string
@@ -609,13 +549,11 @@ service cloud.firestore {
         && request.resource.data.channelName is string
         && request.resource.data.serviceTitle is string
         && request.resource.data.status == "ringing"
+        && request.resource.data.channelName == request.resource.data.callId;
 
-        && request.resource.data.channelName ==
-           request.resource.data.callId;
 
       // -------------------------------------------------------
-      // Caller-state document
-      //
+      // CALLER STATE
       // /calls/{callerUid}
       // -------------------------------------------------------
 
@@ -624,9 +562,7 @@ service cloud.firestore {
         && request.resource.data.callerId == request.auth.uid
         && request.resource.data.calleeId is string
         && request.resource.data.calleeId != request.auth.uid
-        && request.resource.data.otherUserId ==
-           request.resource.data.calleeId
-
+        && request.resource.data.otherUserId == request.resource.data.calleeId
         && request.resource.data.keys().hasOnly([
           "callId",
           "callerId",
@@ -635,76 +571,51 @@ service cloud.firestore {
           "channelName",
           "status"
         ])
-
         && request.resource.data.callId is string
         && request.resource.data.callerId is string
         && request.resource.data.calleeId is string
         && request.resource.data.otherUserId is string
         && request.resource.data.channelName is string
         && request.resource.data.status == "calling"
+        && request.resource.data.channelName == request.resource.data.callId;
 
-        && request.resource.data.channelName ==
-           request.resource.data.callId;
 
       // -------------------------------------------------------
-      // UPDATE
-      //
-      // Only status can ever change.
+      // CALL UPDATE
       // -------------------------------------------------------
 
       allow update: if signedIn()
-
         && request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasOnly([
                "status"
              ])
-
         && (
-
-          // Caller cancels:
-          // ringing -> cancelled
           (
             resource.data.callerId == request.auth.uid
             && resource.data.status == "ringing"
             && request.resource.data.status == "cancelled"
           )
-
           ||
-
-          // Callee accepts:
-          // ringing -> accepted
           (
             resource.data.calleeId == request.auth.uid
             && resource.data.status == "ringing"
             && request.resource.data.status == "accepted"
           )
-
           ||
-
-          // Callee declines:
-          // ringing -> declined
           (
             resource.data.calleeId == request.auth.uid
             && resource.data.status == "ringing"
             && request.resource.data.status == "declined"
           )
-
           ||
-
-          // Callee updates caller-state:
-          // calling -> accepted
           (
             resource.data.callerId == callId
             && resource.data.calleeId == request.auth.uid
             && resource.data.status == "calling"
             && request.resource.data.status == "accepted"
           )
-
           ||
-
-          // Callee updates caller-state:
-          // calling -> declined
           (
             resource.data.callerId == callId
             && resource.data.calleeId == request.auth.uid
@@ -713,8 +624,7 @@ service cloud.firestore {
           )
         );
 
-      // Either participant may remove call state.
-      // Needed by current call cleanup/end-call flow.
+
       allow delete: if signedIn()
         && (
           resource.data.callerId == request.auth.uid
@@ -722,14 +632,13 @@ service cloud.firestore {
         );
     }
 
+
     // =========================================================
     // COMPLAINTS
     // =========================================================
 
     match /complaints/{complaintId} {
 
-      // User can submit a complaint only as himself.
-      // targetUserId must actually be the owner of the reported service.
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "serviceId",
@@ -745,22 +654,19 @@ service cloud.firestore {
           "reason",
           "timestamp"
         ])
-
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.serviceId is string
         && request.resource.data.targetUserId is string
         && request.resource.data.reason is string
         && request.resource.data.timestamp is int
-
         && request.resource.data.targetUserId != request.auth.uid
-
         && get(
              /databases/$(database)/documents/services/$(request.resource.data.serviceId)
            ).data.userId == request.resource.data.targetUserId;
 
-      // Complaints are private/admin-side.
       allow read, update, delete: if false;
     }
+
 
     // =========================================================
     // DEFAULT DENY

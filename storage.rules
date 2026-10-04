@@ -3,21 +3,88 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Profile photos
+    // =========================================================
+    // PROFILE PHOTOS
+    // =========================================================
+
     match /profile_photos/{fileName} {
+
       allow read: if request.auth != null;
+
       allow write: if request.auth != null
-      && request.resource.size < 5 * 1024 * 1024
-      && request.resource.contentType.matches('image/.*');
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
 
-    // Chat attachments
+
+    // =========================================================
+    // CHAT ATTACHMENTS
+    // =========================================================
+    //
+    // A user may access an attachment only if a trusted
+    // Cloud Function has created:
+    //
+    // chatAccess/{chatId}/participants/{uid}
+    //
+    // Client users cannot create these Firestore documents.
+    //
+
     match /chat_attachments/{chatId}/{fileName} {
-      allow read, write: if request.auth != null
-      && chatId != null;
+
+      // -------------------------------------------------------
+      // READ
+      // -------------------------------------------------------
+
+      allow read: if request.auth != null
+        && firestore.exists(
+          /databases/(default)/documents/chatAccess/$(chatId)/participants/$(request.auth.uid)
+        );
+
+
+      // -------------------------------------------------------
+      // CREATE
+      // -------------------------------------------------------
+      //
+      // Maximum attachment size: 25 MB.
+      //
+      // The content type must be present.
+      //
+
+      allow create: if request.auth != null
+        && firestore.exists(
+          /databases/(default)/documents/chatAccess/$(chatId)/participants/$(request.auth.uid)
+        )
+        && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType != null
+        && request.resource.contentType.size() > 0;
+
+
+      // -------------------------------------------------------
+      // UPDATE
+      // -------------------------------------------------------
+      //
+      // Do not allow replacing an existing attachment.
+      // A new attachment gets a new object path.
+      //
+
+      allow update: if false;
+
+
+      // -------------------------------------------------------
+      // DELETE
+      // -------------------------------------------------------
+
+      allow delete: if request.auth != null
+        && firestore.exists(
+          /databases/(default)/documents/chatAccess/$(chatId)/participants/$(request.auth.uid)
+        );
     }
 
-    // Deny everything else
+
+    // =========================================================
+    // DEFAULT DENY
+    // =========================================================
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

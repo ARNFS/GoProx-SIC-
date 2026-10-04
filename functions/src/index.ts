@@ -4,6 +4,9 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
 admin.initializeApp();
 
+const db = admin.firestore();
+const realtimeDb = admin.database();
+
 export const ensureChatParticipant = onCall(
     {
         region: "europe-west1",
@@ -38,8 +41,7 @@ export const ensureChatParticipant = onCall(
             );
         }
 
-        const targetUserDoc = await admin
-            .firestore()
+        const targetUserDoc = await db
             .collection("users")
             .doc(targetUid)
             .get();
@@ -56,14 +58,67 @@ export const ensureChatParticipant = onCall(
                 ? `${callerUid}_${targetUid}`
                 : `${targetUid}_${callerUid}`;
 
-        const participantsRef = admin
-            .database()
+        /*
+         * =====================================================
+         * RTDB CHAT MEMBERSHIP
+         * =====================================================
+         *
+         * The client is NOT allowed to write participants.
+         * This trusted Cloud Function creates both participants.
+         */
+        const participantsRef = realtimeDb
             .ref(`chats/${chatId}/participants`);
 
         await participantsRef.update({
             [callerUid]: true,
             [targetUid]: true,
         });
+
+        /*
+         * =====================================================
+         * FIRESTORE CHAT ACCESS CONTROL
+         * =====================================================
+         *
+         * Cloud Storage Security Rules cannot use RTDB
+         * membership directly.
+         *
+         * Therefore Firestore becomes the authoritative access
+         * source for chat attachment authorization.
+         *
+         * Client users cannot write these documents because
+         * firestore.rules explicitly denies client access.
+         */
+        const chatAccessRef = db
+            .collection("chatAccess")
+            .doc(chatId);
+
+        const batch = db.batch();
+
+        batch.set(
+            chatAccessRef.collection("participants").doc(callerUid),
+            {
+                uid: callerUid,
+                chatId: chatId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            {
+                merge: true,
+            }
+        );
+
+        batch.set(
+            chatAccessRef.collection("participants").doc(targetUid),
+            {
+                uid: targetUid,
+                chatId: chatId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            {
+                merge: true,
+            }
+        );
+
+        await batch.commit();
 
         return {
             success: true,
@@ -98,8 +153,7 @@ export const sendCallNotification = onDocumentWritten(
         const channelName: string = data.channelName || "";
         const serviceTitle: string = data.serviceTitle || "";
 
-        const userDoc = await admin
-            .firestore()
+        const userDoc = await db
             .collection("users")
             .doc(calleeId)
             .get();
@@ -112,7 +166,10 @@ export const sendCallNotification = onDocumentWritten(
             userDoc.data()?.fcmToken;
 
         if (!fcmToken) {
-            console.log("No FCM token for user:", calleeId);
+            console.log(
+                "No FCM token for user:",
+                calleeId
+            );
             return;
         }
 
