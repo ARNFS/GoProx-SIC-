@@ -153,17 +153,19 @@ export const sendCallNotification = onDocumentWritten(
         const channelName: string = data.channelName || "";
         const serviceTitle: string = data.serviceTitle || "";
 
-        const userDoc = await db
+        const deviceDoc = await db
             .collection("users")
             .doc(calleeId)
+            .collection("private")
+            .doc("device")
             .get();
 
-        if (!userDoc.exists) {
+        if (!deviceDoc.exists) {
             return;
         }
 
         const fcmToken: string | undefined =
-            userDoc.data()?.fcmToken;
+            deviceDoc.data()?.fcmToken;
 
         if (!fcmToken) {
             console.log(

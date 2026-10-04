@@ -30,8 +30,7 @@ service cloud.firestore {
           "name",
           "email",
           "uid",
-          "photoUrl",
-          "fcmToken"
+          "photoUrl"
         ])
         && request.resource.data.keys().hasAll([
           "name",
@@ -45,10 +44,6 @@ service cloud.firestore {
         && (
           !request.resource.data.keys().hasAny(["photoUrl"])
           || request.resource.data.photoUrl is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["fcmToken"])
-          || request.resource.data.fcmToken is string
         );
 
       allow update: if signedIn()
@@ -59,8 +54,7 @@ service cloud.firestore {
           "name",
           "email",
           "uid",
-          "photoUrl",
-          "fcmToken"
+          "photoUrl"
         ])
         && request.resource.data.name is string
         && request.resource.data.email is string
@@ -68,14 +62,40 @@ service cloud.firestore {
         && (
           !request.resource.data.keys().hasAny(["photoUrl"])
           || request.resource.data.photoUrl is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["fcmToken"])
-          || request.resource.data.fcmToken is string
         );
 
       allow delete: if isOwner(userId)
         && resource.data.uid == request.auth.uid;
+    }
+
+
+    // =========================================================
+    // PRIVATE USER DATA
+    // =========================================================
+
+    // Sensitive user/device data.
+    //
+    // Clients cannot read these documents.
+    //
+    // The authenticated user may only create/update/delete
+    // their own "device" document.
+
+    match /users/{userId}/private/{privateDoc} {
+
+      allow read: if false;
+
+      allow create, update: if isOwner(userId)
+        && privateDoc == "device"
+        && request.resource.data.keys().hasOnly([
+          "fcmToken"
+        ])
+        && request.resource.data.keys().hasAll([
+          "fcmToken"
+        ])
+        && request.resource.data.fcmToken is string;
+
+      allow delete: if isOwner(userId)
+        && privateDoc == "device";
     }
 
 

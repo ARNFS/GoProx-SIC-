@@ -23,10 +23,13 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 String uid = user.getUid();
                 Map<String, Object> data = new HashMap<>();
                 data.put("fcmToken", token);
+
                 FirebaseFirestore.getInstance()
                         .collection("users")
                         .document(uid)
-                        .update(data);
+                        .collection("private")
+                        .document("device")
+                        .set(data);
             }
         } catch (Exception ignored) {}
     }
