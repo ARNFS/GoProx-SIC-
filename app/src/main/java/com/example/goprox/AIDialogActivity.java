@@ -3,29 +3,25 @@ package com.example.goprox;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+
 import androidx.appcompat.widget.Toolbar;
 
-import org.json.JSONArray;
+import com.google.firebase.functions.FirebaseFunctions;
+
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class AIDialogActivity extends BaseActivity {
 
@@ -34,27 +30,28 @@ public class AIDialogActivity extends BaseActivity {
     private LinearLayout llChatContainer;
     private ScrollView scrollView;
 
-    private static final String GROQ_API_KEY = BuildConfig.GROQ_API_KEY;
-    private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-    private OkHttpClient client;
+    private FirebaseFunctions firebaseFunctions;
     private FirebaseService firebaseService;
 
     private long lastRequestTime = 0;
+
     private static final long MIN_INTERVAL = 1000;
 
     private boolean canMakeRequest() {
         long now = System.currentTimeMillis();
+
         if (now - lastRequestTime >= MIN_INTERVAL) {
             lastRequestTime = now;
             return true;
         }
+
         return false;
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_ai_dialog);
 
         etUserInput = findViewById(R.id.etUserInput);
@@ -63,251 +60,698 @@ public class AIDialogActivity extends BaseActivity {
         scrollView = findViewById(R.id.scrollView);
 
         Toolbar toolbar = findViewById(R.id.toolbar);
+
         setSupportActionBar(toolbar);
+
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setTitle("AI Assistant");
         }
 
-        client = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build();
+        /*
+         * Firebase Functions are now the only path to AI.
+         *
+         * The Groq API key is NOT stored in the Android app.
+         */
+        firebaseFunctions =
+                FirebaseFunctions.getInstance("europe-west1");
 
         firebaseService = new FirebaseService();
 
-        addMessage("🔧 AI is ready. Describe what you need.", false, 0);
+        addMessage(
+                "🔧 AI is ready. Describe what you need.",
+                false,
+                0
+        );
 
         btnSend.setOnClickListener(v -> {
-            String text = etUserInput.getText().toString().trim();
+
+            String text =
+                    etUserInput.getText()
+                            .toString()
+                            .trim();
+
             if (!text.isEmpty()) {
-                addMessage(text, true, 0);
+
+                addMessage(
+                        text,
+                        true,
+                        0
+                );
+
                 etUserInput.setText("");
+
                 analyzeProblem(text);
             }
         });
 
-        etUserInput.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                new Handler().postDelayed(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN), 150);
-            }
-        });
+        etUserInput.setOnFocusChangeListener(
+                (v, hasFocus) -> {
+
+                    if (hasFocus) {
+
+                        new Handler().postDelayed(
+                                () ->
+                                        scrollView.fullScroll(
+                                                ScrollView.FOCUS_DOWN
+                                        ),
+                                150
+                        );
+                    }
+                }
+        );
     }
 
     private void analyzeProblem(String problem) {
+
         if (!canMakeRequest()) {
-            addMessage("⏳ Please wait 1 second before sending another request.", false, 0);
+
+            addMessage(
+                    "⏳ Please wait 1 second before sending another request.",
+                    false,
+                    0
+            );
+
             return;
         }
 
         TextView thinking = new TextView(this);
-        thinking.setText("⏳ AI is analyzing...");
-        thinking.setPadding(24, 16, 24, 16);
-        thinking.setBackgroundResource(R.drawable.bg_ai_message);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMargins(16, 8, 100, 8);
-        thinking.setLayoutParams(params);
-        llChatContainer.addView(thinking);
-        scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
 
-        firebaseService.getAllServicesWithTags(services -> {
-            if (services.isEmpty()) {
-                runOnUiThread(() -> {
-                    llChatContainer.removeView(thinking);
-                    addMessage("❌ No professionals found. Please add services first.", false, 0);
-                });
+        thinking.setText(
+                "⏳ AI is analyzing..."
+        );
+
+        thinking.setPadding(
+                24,
+                16,
+                24,
+                16
+        );
+
+        thinking.setBackgroundResource(
+                R.drawable.bg_ai_message
+        );
+
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        params.setMargins(
+                16,
+                8,
+                100,
+                8
+        );
+
+        thinking.setLayoutParams(params);
+
+        llChatContainer.addView(
+                thinking
+        );
+
+        scrollView.post(
+                () ->
+                        scrollView.fullScroll(
+                                ScrollView.FOCUS_DOWN
+                        )
+        );
+
+        firebaseService.getAllServicesWithTags(
+                services -> {
+
+                    if (services == null || services.isEmpty()) {
+
+                        runOnUiThread(() -> {
+
+                            llChatContainer.removeView(
+                                    thinking
+                            );
+
+                            addMessage(
+                                    "❌ No professionals found. Please add services first.",
+                                    false,
+                                    0
+                            );
+                        });
+
+                        return;
+                    }
+
+                    /*
+                     * -------------------------------------------------
+                     * Build bounded service catalog.
+                     *
+                     * The backend will validate everything again.
+                     * -------------------------------------------------
+                     */
+
+                    ArrayList<Map<String, Object>> serviceData =
+                            new ArrayList<>();
+
+                    Set<String> knownTitles =
+                            new HashSet<>();
+
+                    Map<String, String> canonicalTitles =
+                            new HashMap<>();
+
+                    for (Service service : services) {
+
+                        if (service == null) {
+                            continue;
+                        }
+
+                        String title =
+                                service.getProfession() != null
+                                        ? service.getProfession().trim()
+                                        : "";
+
+                        String description =
+                                service.getDescription() != null
+                                        ? service.getDescription().trim()
+                                        : "";
+
+                        if (title.isEmpty()) {
+                            continue;
+                        }
+
+                        Map<String, Object> serviceItem =
+                                new HashMap<>();
+
+                        serviceItem.put(
+                                "title",
+                                title
+                        );
+
+                        serviceItem.put(
+                                "description",
+                                description
+                        );
+
+                        serviceItem.put(
+                                "rating",
+                                service.getRating()
+                        );
+
+                        ArrayList<String> tags =
+                                new ArrayList<>();
+
+                        if (service.getTags() != null) {
+
+                            for (String tag : service.getTags()) {
+
+                                if (tag != null) {
+                                    String cleanTag =
+                                            tag.trim();
+
+                                    if (!cleanTag.isEmpty()) {
+                                        tags.add(cleanTag);
+                                    }
+                                }
+                            }
+                        }
+
+                        serviceItem.put(
+                                "tags",
+                                tags
+                        );
+
+                        serviceData.add(
+                                serviceItem
+                        );
+
+                        String normalized =
+                                title.toLowerCase();
+
+                        knownTitles.add(
+                                normalized
+                        );
+
+                        canonicalTitles.put(
+                                normalized,
+                                title
+                        );
+                    }
+
+                    if (serviceData.isEmpty()) {
+
+                        runOnUiThread(() -> {
+
+                            llChatContainer.removeView(
+                                    thinking
+                            );
+
+                            addMessage(
+                                    "❌ No usable professionals found.",
+                                    false,
+                                    0
+                            );
+                        });
+
+                        return;
+                    }
+
+                    /*
+                     * -------------------------------------------------
+                     * ONLY normal user/catalog data is sent.
+                     *
+                     * NO Groq API key.
+                     * NO direct provider request.
+                     * -------------------------------------------------
+                     */
+
+                    Map<String, Object> requestData =
+                            new HashMap<>();
+
+                    requestData.put(
+                            "problem",
+                            problem
+                    );
+
+                    requestData.put(
+                            "services",
+                            serviceData
+                    );
+
+                    firebaseFunctions
+                            .getHttpsCallable("askAI")
+                            .call(requestData)
+                            .addOnSuccessListener(result -> {
+
+                                runOnUiThread(() -> {
+
+                                    llChatContainer.removeView(
+                                            thinking
+                                    );
+
+                                    try {
+
+                                        Object data =
+                                                result != null
+                                                        ? result.getData()
+                                                        : null;
+
+                                        if (!(data instanceof Map)) {
+
+                                            addMessage(
+                                                    "❌ Invalid AI response.",
+                                                    false,
+                                                    0
+                                            );
+
+                                            return;
+                                        }
+
+                                        Map<?, ?> responseData =
+                                                (Map<?, ?>) data;
+
+                                        Object contentObject =
+                                                responseData.get(
+                                                        "content"
+                                                );
+
+                                        String raw =
+                                                contentObject instanceof String
+                                                        ? ((String) contentObject).trim()
+                                                        : "";
+
+                                        Log.d(
+                                                "AIDialog",
+                                                "AI structured response received."
+                                        );
+
+                                        parseAIResponse(
+                                                raw,
+                                                knownTitles,
+                                                canonicalTitles
+                                        );
+
+                                    } catch (Exception e) {
+
+                                        Log.e(
+                                                "AIDialog",
+                                                "Failed to process AI response.",
+                                                e
+                                        );
+
+                                        addMessage(
+                                                "❌ Failed to process AI response.",
+                                                false,
+                                                0
+                                        );
+                                    }
+                                });
+                            })
+                            .addOnFailureListener(error -> {
+
+                                Log.e(
+                                        "AIDialog",
+                                        "AI request failed.",
+                                        error
+                                );
+
+                                runOnUiThread(() -> {
+
+                                    llChatContainer.removeView(
+                                            thinking
+                                    );
+
+                                    addMessage(
+                                            "❌ AI request failed. Please try again later.",
+                                            false,
+                                            0
+                                    );
+                                });
+                            });
+                }
+        );
+    }
+
+    private void parseAIResponse(
+            String raw,
+            Set<String> knownTitles,
+            Map<String, String> canonicalTitles
+    ) {
+
+        if (raw == null || raw.trim().isEmpty()) {
+
+            addMessage(
+                    "😔 No matching professional found.",
+                    false,
+                    0
+            );
+
+            return;
+        }
+
+        try {
+
+            JSONObject json =
+                    new JSONObject(
+                            raw.trim()
+                    );
+
+            String intent =
+                    json.optString(
+                            "intent",
+                            "NON_SERVICE_REQUEST"
+                    ).trim();
+
+            int confidence =
+                    json.optInt(
+                            "confidence",
+                            0
+                    );
+
+            if (confidence < 0) {
+                confidence = 0;
+            }
+
+            if (confidence > 100) {
+                confidence = 100;
+            }
+
+            /*
+             * -------------------------------------------------
+             * IMPORTANT:
+             *
+             * AI must first decide whether the user is actually
+             * looking for a professional service.
+             *
+             * Example:
+             *
+             * "I want to play a game"
+             * -> NON_SERVICE_REQUEST
+             *
+             * "I need a game developer"
+             * -> SERVICE_SEARCH
+             * -------------------------------------------------
+             */
+
+            if (!"SERVICE_SEARCH".equalsIgnoreCase(intent)) {
+
+                addMessage(
+                        "😔 No matching professional found.",
+                        false,
+                        0
+                );
+
                 return;
             }
 
-            StringBuilder sb = new StringBuilder();
-            for (Service s : services) {
-                sb.append("TITLE: ").append(s.getProfession()).append("\n");
-                sb.append("DESCRIPTION: ").append(s.getDescription()).append("\n");
-                sb.append("RATING: ").append(s.getRating()).append("/5\n");
-                if (s.getTags() != null && !s.getTags().isEmpty()) {
-                    sb.append("TAGS: ").append(TextUtils.join(", ", s.getTags())).append("\n");
-                }
-                sb.append("\n");
+            if (
+                    !json.has("matched_service_title")
+                            || json.isNull("matched_service_title")
+            ) {
+
+                addMessage(
+                        "😔 No matching professional found.",
+                        false,
+                        0
+                );
+
+                return;
             }
 
-            // 🔥 Ավելի խելացի prompt
-            String prompt = "You are an expert matchmaker for a service-finding app called GoProx.\n" +
-                    "Your job is to find the BEST matching professionals for the user's request.\n\n" +
-                    "RULES:\n" +
-                    "1. Return ONLY the TITLE(s) that match, separated by commas\n" +
-                    "2. If NO match at all, return exactly: NOT_FOUND\n" +
-                    "3. Consider synonyms (e.g. \"plumber\" = \"pipe repair\", \"electrician\" = \"wiring\")\n" +
-                    "4. Consider the user's INTENT, not just keywords\n" +
-                    "5. Rate your confidence in each match from 0-100%\n\n" +
-                    "USER REQUEST: \"" + problem + "\"\n\n" +
-                    "AVAILABLE PROFESSIONALS:\n" + sb.toString() +
-                    "FORMAT: Return in format: TITLE1|CONFIDENCE1, TITLE2|CONFIDENCE2\n" +
-                    "Example: Plumber|95, Electrician|40\n" +
-                    "If none match: NOT_FOUND\n\n" +
-                    "Your answer:";
+            String returnedTitle =
+                    json.optString(
+                            "matched_service_title",
+                            ""
+                    ).trim();
 
-            try {
-                JSONObject json = new JSONObject();
-                json.put("model", "llama-3.3-70b-versatile");
-                json.put("temperature", 0.1);
-                json.put("max_tokens", 150);
+            if (returnedTitle.isEmpty()) {
 
-                JSONArray messages = new JSONArray();
-                JSONObject userMsg = new JSONObject();
-                userMsg.put("role", "user");
-                userMsg.put("content", prompt);
-                messages.put(userMsg);
-                json.put("messages", messages);
+                addMessage(
+                        "😔 No matching professional found.",
+                        false,
+                        0
+                );
 
-                RequestBody body = RequestBody.create(json.toString(), MediaType.parse("application/json"));
-                Request request = new Request.Builder()
-                        .url(API_URL)
-                        .header("Authorization", "Bearer " + GROQ_API_KEY)
-                        .post(body)
-                        .build();
-
-                client.newCall(request).enqueue(new Callback() {
-                    @Override
-                    public void onFailure(Call call, IOException e) {
-                        runOnUiThread(() -> {
-                            llChatContainer.removeView(thinking);
-                            addMessage("❌ Network error: " + e.getMessage(), false, 0);
-                        });
-                    }
-
-                    @Override
-                    public void onResponse(Call call, Response response) throws IOException {
-                        String resBody = response.body().string();
-                        runOnUiThread(() -> {
-                            llChatContainer.removeView(thinking);
-                            try {
-                                if (!response.isSuccessful()) {
-                                    addMessage("❌ API error: " + response.code(), false, 0);
-                                    return;
-                                }
-
-                                JSONObject obj = new JSONObject(resBody);
-                                String raw = obj.getJSONArray("choices")
-                                        .getJSONObject(0)
-                                        .getJSONObject("message")
-                                        .getString("content")
-                                        .trim();
-
-                                Log.d("AIDialog", "AI raw: " + raw);
-                                if (raw.isEmpty() || raw.equalsIgnoreCase("NOT_FOUND")) {
-                                    addMessage("😔 No matching professional found.", false, 0);
-                                    return;
-                                }
-
-                                // Parse format: "TITLE1|CONFIDENCE1, TITLE2|CONFIDENCE2"
-                                String[] parts = raw.split(",");
-                                ArrayList<String> finalTitles = new ArrayList<>();
-                                StringBuilder confidenceInfo = new StringBuilder();
-
-                                for (String p : parts) {
-                                    String[] titleConf = p.trim().split("\\|");
-                                    if (titleConf.length >= 2) {
-                                        String title = titleConf[0].trim();
-                                        String confidence = titleConf[1].trim().replaceAll("[^0-9]", "");
-                                        if (!title.isEmpty() && !confidence.isEmpty()) {
-                                            finalTitles.add(title);
-                                            int conf = Integer.parseInt(confidence);
-                                            confidenceInfo.append(title).append(": ").append(conf).append("% match\n");
-                                        }
-                                    } else {
-                                        String t = p.trim();
-                                        if (!t.isEmpty()) finalTitles.add(t);
-                                    }
-                                }
-
-                                if (finalTitles.isEmpty()) {
-                                    addMessage("😔 No matching professional found.", false, 0);
-                                    return;
-                                }
-
-                                // 🔥 Ցույց ենք տալիս արդյունքները + վստահության %
-                                String resultMessage = "✅ Found:\n" + confidenceInfo.toString();
-                                addMessage(resultMessage, false, 0);
-
-                                // 🔥 AI-ի գնահատականը (average confidence)
-                                int avgConfidence = calculateAverageConfidence(confidenceInfo.toString());
-                                String ratingStars = getStarRating(avgConfidence);
-                                addMessage("📊 AI Confidence: " + avgConfidence + "% " + ratingStars, false, 0);
-
-                                Intent intent = new Intent(AIDialogActivity.this, HomeActivity.class);
-                                intent.putStringArrayListExtra("profession_filter_list", finalTitles);
-                                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                                startActivity(intent);
-                                finish();
-
-                            } catch (Exception e) {
-                                addMessage("❌ Error: " + e.getMessage(), false, 0);
-                            }
-                        });
-                    }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    llChatContainer.removeView(thinking);
-                    addMessage("❌ Error: " + e.getMessage(), false, 0);
-                });
+                return;
             }
-        });
+
+            /*
+             * -------------------------------------------------
+             * Defense in depth:
+             *
+             * Even if backend returns something unexpected,
+             * Android accepts only a profession that actually
+             * exists in the catalog sent to the backend.
+             * -------------------------------------------------
+             */
+
+            String normalizedReturnedTitle =
+                    returnedTitle.toLowerCase();
+
+            if (!knownTitles.contains(
+                    normalizedReturnedTitle
+            )) {
+
+                Log.w(
+                        "AIDialog",
+                        "AI returned a title that is not in catalog: "
+                                + returnedTitle
+                );
+
+                addMessage(
+                        "😔 No matching professional found.",
+                        false,
+                        0
+                );
+
+                return;
+            }
+
+            String canonicalTitle =
+                    canonicalTitles.get(
+                            normalizedReturnedTitle
+                    );
+
+            if (
+                    canonicalTitle == null
+                            || canonicalTitle.trim().isEmpty()
+            ) {
+
+                addMessage(
+                        "😔 No matching professional found.",
+                        false,
+                        0
+                );
+
+                return;
+            }
+
+            /*
+             * -------------------------------------------------
+             * One exact service match.
+             * -------------------------------------------------
+             */
+
+            ArrayList<String> finalTitles =
+                    new ArrayList<>();
+
+            finalTitles.add(
+                    canonicalTitle
+            );
+
+            String resultMessage =
+                    "✅ Found:\n"
+                            + canonicalTitle
+                            + ": "
+                            + confidence
+                            + "% match";
+
+            addMessage(
+                    resultMessage,
+                    false,
+                    0
+            );
+
+            String ratingStars =
+                    getStarRating(
+                            confidence
+                    );
+
+            addMessage(
+                    "📊 AI Confidence: "
+                            + confidence
+                            + "% "
+                            + ratingStars,
+                    false,
+                    confidence
+            );
+
+            Intent intent =
+                    new Intent(
+                            AIDialogActivity.this,
+                            HomeActivity.class
+                    );
+
+            intent.putStringArrayListExtra(
+                    "profession_filter_list",
+                    finalTitles
+            );
+
+            intent.setFlags(
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            );
+
+            startActivity(intent);
+
+            finish();
+
+        } catch (Exception e) {
+
+            Log.e(
+                    "AIDialog",
+                    "Invalid structured AI response: " + raw,
+                    e
+            );
+
+            addMessage(
+                    "❌ Invalid AI response.",
+                    false,
+                    0
+            );
+        }
     }
 
-    // 🔥 Calculate average confidence
-    private int calculateAverageConfidence(String confidenceInfo) {
-        try {
-            String[] lines = confidenceInfo.split("\n");
-            int total = 0, count = 0;
-            for (String line : lines) {
-                String[] parts = line.split(": ");
-                if (parts.length >= 2) {
-                    String num = parts[1].replaceAll("[^0-9]", "");
-                    if (!num.isEmpty()) {
-                        total += Integer.parseInt(num);
-                        count++;
-                    }
-                }
-            }
-            return count > 0 ? total / count : 0;
-        } catch (Exception e) { return 0; }
-    }
+    private String getStarRating(
+            int confidence
+    ) {
 
-    // 🔥 Star rating based on confidence
-    private String getStarRating(int confidence) {
-        if (confidence >= 90) return "⭐⭐⭐⭐⭐";
-        if (confidence >= 70) return "⭐⭐⭐⭐";
-        if (confidence >= 50) return "⭐⭐⭐";
-        if (confidence >= 30) return "⭐⭐";
+        if (confidence >= 90) {
+            return "⭐⭐⭐⭐⭐";
+        }
+
+        if (confidence >= 70) {
+            return "⭐⭐⭐⭐";
+        }
+
+        if (confidence >= 50) {
+            return "⭐⭐⭐";
+        }
+
+        if (confidence >= 30) {
+            return "⭐⭐";
+
+        }
+
         return "⭐";
     }
 
-    private void addMessage(String text, boolean isUser, int confidence) {
-        TextView tv = new TextView(this);
+    private void addMessage(
+            String text,
+            boolean isUser,
+            int confidence
+    ) {
+
+        TextView tv =
+                new TextView(this);
+
         tv.setText(text);
         tv.setTextSize(16);
-        tv.setPadding(24, 16, 24, 16);
-        tv.setBackgroundResource(isUser ? R.drawable.bg_user_message : R.drawable.bg_ai_message);
-        tv.setTextColor(isUser ? 0xFFFFFFFF : 0xFF000000);
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMargins(isUser ? 100 : 16, 8, isUser ? 16 : 100, 8);
-        params.gravity = isUser ? android.view.Gravity.END : android.view.Gravity.START;
+        tv.setPadding(
+                24,
+                16,
+                24,
+                16
+        );
+
+        tv.setBackgroundResource(
+                isUser
+                        ? R.drawable.bg_user_message
+                        : R.drawable.bg_ai_message
+        );
+
+        tv.setTextColor(
+                isUser
+                        ? 0xFFFFFFFF
+                        : 0xFF000000
+        );
+
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        params.setMargins(
+                isUser ? 100 : 16,
+                8,
+                isUser ? 16 : 100,
+                8
+        );
+
+        params.gravity =
+                isUser
+                        ? android.view.Gravity.END
+                        : android.view.Gravity.START;
+
         tv.setLayoutParams(params);
+
         tv.setMaxWidth(900);
-        llChatContainer.addView(tv);
-        scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+
+        llChatContainer.addView(
+                tv
+        );
+
+        scrollView.post(
+                () ->
+                        scrollView.fullScroll(
+                                ScrollView.FOCUS_DOWN
+                        )
+        );
     }
 
     @Override
     public boolean onSupportNavigateUp() {
+
         onBackPressed();
+
         return true;
     }
 }

@@ -121,9 +121,6 @@
 -keep class com.example.goprox.FirebaseService { *; }
 -keep class com.example.goprox.BaseActivity { *; }
 
-# ==================== BUILD CONFIG ====================
--keep class com.example.goprox.BuildConfig { *; }
-
 # ==================== REMOVE LOGGING IN RELEASE ====================
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);

@@ -19,21 +19,7 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val groqApiKey = getLocalProperty("GROQ_API_KEY")
-        val deepseekApiKey = getLocalProperty("DEEPSEEK_API_KEY")
         val agoraAppId = getLocalProperty("AGORA_APP_ID")
-
-        buildConfigField(
-            "String",
-            "GROQ_API_KEY",
-            "\"$groqApiKey\""
-        )
-
-        buildConfigField(
-            "String",
-            "DEEPSEEK_API_KEY",
-            "\"$deepseekApiKey\""
-        )
 
         buildConfigField(
             "String",
@@ -77,14 +63,21 @@ android {
 }
 
 fun getLocalProperty(key: String): String {
-    val properties = Properties()
+
+    val properties =
+        Properties()
 
     val localPropsFile =
-        rootProject.file("local.properties")
+        rootProject.file(
+            "local.properties"
+        )
 
     if (localPropsFile.exists()) {
+
         properties.load(
-            FileInputStream(localPropsFile)
+            FileInputStream(
+                localPropsFile
+            )
         )
     }
 
@@ -100,14 +93,37 @@ dependencies {
     // AndroidX & Material
     // =========================================================
 
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("com.google.android.material:material:1.13.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
-    implementation("androidx.core:core-ktx:1.18.0")
-    implementation("androidx.activity:activity:1.13.0")
-    implementation("androidx.recyclerview:recyclerview:1.4.0")
-    implementation("androidx.cardview:cardview:1.0.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0")
+    implementation(
+        "androidx.appcompat:appcompat:1.7.1"
+    )
+
+    implementation(
+        "com.google.android.material:material:1.13.0"
+    )
+
+    implementation(
+        "androidx.constraintlayout:constraintlayout:2.2.1"
+    )
+
+    implementation(
+        "androidx.core:core-ktx:1.18.0"
+    )
+
+    implementation(
+        "androidx.activity:activity:1.13.0"
+    )
+
+    implementation(
+        "androidx.recyclerview:recyclerview:1.4.0"
+    )
+
+    implementation(
+        "androidx.cardview:cardview:1.0.0"
+    )
+
+    implementation(
+        "androidx.swiperefreshlayout:swiperefreshlayout:1.2.0"
+    )
 
     // =========================================================
     // Firebase BOM + services
@@ -119,14 +135,37 @@ dependencies {
         )
     )
 
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-database")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-functions")
-    implementation("com.google.firebase:firebase-messaging:25.0.2")
-    implementation("com.google.firebase:firebase-crashlytics")
+    implementation(
+        "com.google.firebase:firebase-auth"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-database"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-firestore"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-storage"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-analytics"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-functions"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-messaging:25.0.2"
+    )
+
+    implementation(
+        "com.google.firebase:firebase-crashlytics"
+    )
 
     // =========================================================
     // Google Play Services
@@ -238,7 +277,6 @@ dependencies {
 
     // =========================================================
     // Agora RTC Video SDK
-    // Latest Android RTC SDK: 4.6.4
     // =========================================================
 
     implementation(
