@@ -92,7 +92,10 @@ function normalizeServices(input: unknown): AIService[] {
         const tags: string[] = [];
 
         if (Array.isArray(service.tags)) {
-            for (const tag of service.tags.slice(0, MAX_TAGS_PER_SERVICE)) {
+            for (const tag of service.tags.slice(
+                0,
+                MAX_TAGS_PER_SERVICE
+            )) {
                 const normalizedTag = readBoundedString(
                     tag,
                     MAX_TAG_LENGTH
@@ -369,6 +372,37 @@ For no professional match or a non-service request:
                             content: userPrompt,
                         },
                     ],
+                    response_format: {
+                        type: "json_schema",
+                        json_schema: {
+                            name: "service_search_result",
+                            strict: true,
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    intent: {
+                                        type: "string",
+                                        enum: [
+                                            "SERVICE_SEARCH",
+                                            "NON_SERVICE_REQUEST",
+                                        ],
+                                    },
+                                    confidence: {
+                                        type: "integer",
+                                    },
+                                    matched_service_title: {
+                                        type: ["string", "null"],
+                                    },
+                                },
+                                required: [
+                                    "intent",
+                                    "confidence",
+                                    "matched_service_title",
+                                ],
+                                additionalProperties: false,
+                            },
+                        },
+                    },
                     temperature: 0.1,
                     max_completion_tokens: 1024,
                     reasoning_effort: "low",
