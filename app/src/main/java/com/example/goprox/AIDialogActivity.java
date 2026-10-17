@@ -1,3 +1,4 @@
+
 package com.example.goprox;
 
 import android.content.Intent;
@@ -622,23 +623,23 @@ public class AIDialogActivity extends BaseActivity {
                     confidence
             );
 
-            Intent intent =
+            Intent navigationIntent =
                     new Intent(
                             AIDialogActivity.this,
                             HomeActivity.class
                     );
 
-            intent.putStringArrayListExtra(
+            navigationIntent.putStringArrayListExtra(
                     "profession_filter_list",
                     finalTitles
             );
 
-            intent.setFlags(
+            navigationIntent.setFlags(
                     Intent.FLAG_ACTIVITY_CLEAR_TOP
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP
             );
 
-            startActivity(intent);
+            startActivity(navigationIntent);
 
             finish();
 
