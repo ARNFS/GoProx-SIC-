@@ -25,47 +25,47 @@ service cloud.firestore {
       allow read: if signedIn();
 
       allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly([
-          "name",
-          "email",
-          "uid",
-          "photoUrl"
-        ])
-        && request.resource.data.keys().hasAll([
-          "name",
-          "email",
-          "uid"
-        ])
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.uid is string
-        && request.resource.data.uid == request.auth.uid
-        && (
-          !request.resource.data.keys().hasAny(["photoUrl"])
-          || request.resource.data.photoUrl is string
-        );
+      && request.auth.uid == userId
+      && request.resource.data.keys().hasOnly([
+        "name",
+        "email",
+        "uid",
+        "photoUrl"
+      ])
+      && request.resource.data.keys().hasAll([
+        "name",
+        "email",
+        "uid"
+      ])
+      && request.resource.data.name is string
+      && request.resource.data.email is string
+      && request.resource.data.uid is string
+      && request.resource.data.uid == request.auth.uid
+      && (
+        !request.resource.data.keys().hasAny(["photoUrl"])
+        || request.resource.data.photoUrl is string
+      );
 
       allow update: if signedIn()
-        && request.auth.uid == userId
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.keys().hasOnly([
-          "name",
-          "email",
-          "uid",
-          "photoUrl"
-        ])
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.uid is string
-        && (
-          !request.resource.data.keys().hasAny(["photoUrl"])
-          || request.resource.data.photoUrl is string
-        );
+      && request.auth.uid == userId
+      && resource.data.uid == request.auth.uid
+      && request.resource.data.uid == resource.data.uid
+      && request.resource.data.keys().hasOnly([
+        "name",
+        "email",
+        "uid",
+        "photoUrl"
+      ])
+      && request.resource.data.name is string
+      && request.resource.data.email is string
+      && request.resource.data.uid is string
+      && (
+        !request.resource.data.keys().hasAny(["photoUrl"])
+        || request.resource.data.photoUrl is string
+      );
 
       allow delete: if isOwner(userId)
-        && resource.data.uid == request.auth.uid;
+      && resource.data.uid == request.auth.uid;
     }
 
 
@@ -73,29 +73,22 @@ service cloud.firestore {
     // PRIVATE USER DATA
     // =========================================================
 
-    // Sensitive user/device data.
-    //
-    // Clients cannot read these documents.
-    //
-    // The authenticated user may only create/update/delete
-    // their own "device" document.
-
     match /users/{userId}/private/{privateDoc} {
 
       allow read: if false;
 
       allow create, update: if isOwner(userId)
-        && privateDoc == "device"
-        && request.resource.data.keys().hasOnly([
-          "fcmToken"
-        ])
-        && request.resource.data.keys().hasAll([
-          "fcmToken"
-        ])
-        && request.resource.data.fcmToken is string;
+      && privateDoc == "device"
+      && request.resource.data.keys().hasOnly([
+        "fcmToken"
+      ])
+      && request.resource.data.keys().hasAll([
+        "fcmToken"
+      ])
+      && request.resource.data.fcmToken is string;
 
       allow delete: if isOwner(userId)
-        && privateDoc == "device";
+      && privateDoc == "device";
     }
 
 
@@ -108,110 +101,123 @@ service cloud.firestore {
       allow read: if signedIn();
 
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "name",
-          "profession",
-          "description",
-          "price",
-          "priceType",
-          "rating",
-          "ratingCount",
-          "userId",
-          "tags",
-          "createdAt",
-          "imageUrl",
-          "country",
-          "city"
-        ])
-        && request.resource.data.keys().hasAll([
-          "name",
-          "profession",
-          "description",
-          "price",
-          "priceType",
-          "rating",
-          "ratingCount",
-          "userId",
-          "tags",
-          "createdAt",
-          "imageUrl"
-        ])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.profession is string
-        && request.resource.data.description is string
-        && request.resource.data.price is string
-        && request.resource.data.priceType is string
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 0
-        && request.resource.data.rating <= 5
-        && request.resource.data.ratingCount is int
-        && request.resource.data.ratingCount >= 0
-        && request.resource.data.tags is list
-        && request.resource.data.createdAt is int
-        && (
-          request.resource.data.imageUrl == null
-          || request.resource.data.imageUrl is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["country"])
-          || request.resource.data.country is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["city"])
-          || request.resource.data.city is string
-        );
+      && request.resource.data.keys().hasOnly([
+        "name",
+        "profession",
+        "description",
+        "price",
+        "priceType",
+        "rating",
+        "ratingCount",
+        "userId",
+        "tags",
+        "createdAt",
+        "updatedAt",
+        "imageUrl",
+        "country",
+        "city"
+      ])
+      && request.resource.data.keys().hasAll([
+        "name",
+        "profession",
+        "description",
+        "price",
+        "priceType",
+        "rating",
+        "ratingCount",
+        "userId",
+        "tags",
+        "createdAt",
+        "updatedAt"
+      ])
+      && request.resource.data.userId == request.auth.uid
+      && request.resource.data.name is string
+      && request.resource.data.profession is string
+      && request.resource.data.description is string
+      && (
+        request.resource.data.price is number
+        || request.resource.data.price is string
+      )
+      && request.resource.data.priceType is string
+      && request.resource.data.rating is number
+      && request.resource.data.rating >= 0
+      && request.resource.data.rating <= 5
+      && request.resource.data.ratingCount is int
+      && request.resource.data.ratingCount >= 0
+      && request.resource.data.tags is list
+      && request.resource.data.createdAt is timestamp
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time
+      && (
+        !request.resource.data.keys().hasAny(["imageUrl"])
+        || request.resource.data.imageUrl is string
+      )
+      && (
+        !request.resource.data.keys().hasAny(["country"])
+        || request.resource.data.country is string
+      )
+      && (
+        !request.resource.data.keys().hasAny(["city"])
+        || request.resource.data.city is string
+      );
 
       allow update: if signedIn()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.keys().hasOnly([
-          "name",
-          "profession",
-          "description",
-          "price",
-          "priceType",
-          "rating",
-          "ratingCount",
-          "userId",
-          "tags",
-          "createdAt",
-          "imageUrl",
-          "country",
-          "city",
-          "updatedAt"
-        ])
-        && request.resource.data.name is string
-        && request.resource.data.profession is string
-        && request.resource.data.description is string
-        && request.resource.data.price is string
-        && request.resource.data.priceType is string
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 0
-        && request.resource.data.rating <= 5
-        && request.resource.data.ratingCount is int
-        && request.resource.data.ratingCount >= 0
-        && request.resource.data.tags is list
-        && request.resource.data.createdAt is int
-        && (
-          request.resource.data.imageUrl == null
-          || request.resource.data.imageUrl is string
+      && resource.data.userId == request.auth.uid
+      && request.resource.data.userId == resource.data.userId
+      && request.resource.data.keys().hasOnly([
+        "name",
+        "profession",
+        "description",
+        "price",
+        "priceType",
+        "rating",
+        "ratingCount",
+        "userId",
+        "tags",
+        "createdAt",
+        "updatedAt",
+        "imageUrl",
+        "country",
+        "city"
+      ])
+      && request.resource.data.name is string
+      && request.resource.data.profession is string
+      && request.resource.data.description is string
+      && (
+        request.resource.data.price is number
+        || request.resource.data.price is string
+      )
+      && request.resource.data.priceType is string
+      && request.resource.data.rating is number
+      && request.resource.data.rating >= 0
+      && request.resource.data.rating <= 5
+      && request.resource.data.ratingCount is int
+      && request.resource.data.ratingCount >= 0
+      && request.resource.data.tags is list
+      && request.resource.data.createdAt is timestamp
+      && (
+        !request.resource.data.keys().hasAny(["updatedAt"])
+        || (
+          request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedAt == request.time
         )
-        && (
-          !request.resource.data.keys().hasAny(["country"])
-          || request.resource.data.country is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["city"])
-          || request.resource.data.city is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(["updatedAt"])
-          || request.resource.data.updatedAt is int
-        );
+      )
+      && (
+        !request.resource.data.keys().hasAny(["imageUrl"])
+        || request.resource.data.imageUrl is string
+      )
+      && (
+        !request.resource.data.keys().hasAny(["country"])
+        || request.resource.data.country is string
+      )
+      && (
+        !request.resource.data.keys().hasAny(["city"])
+        || request.resource.data.city is string
+      );
 
       allow delete: if signedIn()
-        && resource.data.userId == request.auth.uid;
+      && resource.data.userId == request.auth.uid;
 
 
       // =======================================================
@@ -223,51 +229,51 @@ service cloud.firestore {
         allow read: if signedIn();
 
         allow create: if signedIn()
-          && request.resource.data.keys().hasOnly([
-            "userId",
-            "userName",
-            "rating",
-            "comment",
-            "timestamp"
-          ])
-          && request.resource.data.keys().hasAll([
-            "userId",
-            "userName",
-            "rating",
-            "comment",
-            "timestamp"
-          ])
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.userId !=
-             get(
-               /databases/$(database)/documents/services/$(serviceId)
-             ).data.userId
-          && request.resource.data.userName is string
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1
-          && request.resource.data.rating <= 5
-          && request.resource.data.comment is string
-          && request.resource.data.timestamp is int;
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "userName",
+          "rating",
+          "comment",
+          "timestamp"
+        ])
+        && request.resource.data.keys().hasAll([
+          "userId",
+          "userName",
+          "rating",
+          "comment",
+          "timestamp"
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userId !=
+        get(
+          /databases/$(database)/documents/services/$(serviceId)
+        ).data.userId
+        && request.resource.data.userName is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.timestamp is int;
 
         allow update: if signedIn()
-          && resource.data.userId == request.auth.uid
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.keys().hasOnly([
-            "userId",
-            "userName",
-            "rating",
-            "comment",
-            "timestamp"
-          ])
-          && request.resource.data.userName is string
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1
-          && request.resource.data.rating <= 5
-          && request.resource.data.comment is string
-          && request.resource.data.timestamp is int;
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "userName",
+          "rating",
+          "comment",
+          "timestamp"
+        ])
+        && request.resource.data.userName is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.timestamp is int;
 
         allow delete: if signedIn()
-          && resource.data.userId == request.auth.uid;
+        && resource.data.userId == request.auth.uid;
       }
     }
 
@@ -275,22 +281,8 @@ service cloud.firestore {
     // =========================================================
     // CHAT ACCESS CONTROL
     // =========================================================
-    //
-    // IMPORTANT:
-    //
-    // These documents are server-managed.
-    //
-    // ensureChatParticipant Cloud Function uses Admin SDK
-    // to create them.
-    //
-    // Client users have NO direct read/write access.
-    //
-    // Cloud Storage Rules use `exists()` against these docs
-    // to authorize chat attachments.
-    //
 
     match /chatAccess/{chatId}/participants/{userId} {
-
       allow read, write: if false;
     }
 
@@ -302,228 +294,187 @@ service cloud.firestore {
     match /serviceRequests/{requestId} {
 
       allow read: if signedIn()
-        && (
-          resource.data.customerId == request.auth.uid
-          || resource.data.providerId == request.auth.uid
-        );
-
-
-      // -------------------------------------------------------
-      // CREATE
-      // -------------------------------------------------------
+      && (
+        resource.data.customerId == request.auth.uid
+        || resource.data.providerId == request.auth.uid
+      );
 
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "requestId",
-          "serviceId",
-          "customerId",
-          "providerId",
-          "status",
-          "message",
-          "requestedPrice",
-          "priceType",
-          "createdAt",
-          "updatedAt"
-        ])
-        && request.resource.data.keys().hasAll([
-          "requestId",
-          "serviceId",
-          "customerId",
-          "providerId",
-          "status",
-          "message",
-          "requestedPrice",
-          "priceType",
-          "createdAt",
-          "updatedAt"
-        ])
-        && request.resource.data.requestId == requestId
-        && request.resource.data.serviceId is string
-        && request.resource.data.customerId is string
-        && request.resource.data.providerId is string
-        && request.resource.data.status == "requested"
-        && request.resource.data.message is string
-        && request.resource.data.requestedPrice is string
-        && request.resource.data.priceType is string
-        && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.customerId != request.resource.data.providerId
-        && get(
-             /databases/$(database)/documents/services/$(request.resource.data.serviceId)
-           ).data.userId == request.resource.data.providerId
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-
-
-      // -------------------------------------------------------
-      // REQUESTED -> ACCEPTED
-      // -------------------------------------------------------
+      && request.resource.data.keys().hasOnly([
+        "requestId",
+        "serviceId",
+        "customerId",
+        "providerId",
+        "status",
+        "message",
+        "requestedPrice",
+        "priceType",
+        "createdAt",
+        "updatedAt"
+      ])
+      && request.resource.data.keys().hasAll([
+        "requestId",
+        "serviceId",
+        "customerId",
+        "providerId",
+        "status",
+        "message",
+        "requestedPrice",
+        "priceType",
+        "createdAt",
+        "updatedAt"
+      ])
+      && request.resource.data.requestId == requestId
+      && request.resource.data.serviceId is string
+      && request.resource.data.customerId is string
+      && request.resource.data.providerId is string
+      && request.resource.data.status == "requested"
+      && request.resource.data.message is string
+      && request.resource.data.requestedPrice is string
+      && request.resource.data.priceType is string
+      && request.resource.data.customerId == request.auth.uid
+      && request.resource.data.customerId != request.resource.data.providerId
+      && get(
+        /databases/$(database)/documents/services/$(request.resource.data.serviceId)
+      ).data.userId == request.resource.data.providerId
+      && request.resource.data.createdAt is timestamp
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.updatedAt == request.time;
 
       allow update: if signedIn()
-        && resource.data.providerId == request.auth.uid
-        && resource.data.status == "requested"
-        && request.resource.data.status == "accepted"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "acceptedAt",
-               "updatedAt"
-             ])
-        && request.resource.data.acceptedAt is timestamp
-        && request.resource.data.acceptedAt == request.time
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time;
-
-
-      // -------------------------------------------------------
-      // REQUESTED -> REJECTED
-      // -------------------------------------------------------
+      && resource.data.providerId == request.auth.uid
+      && resource.data.status == "requested"
+      && request.resource.data.status == "accepted"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "acceptedAt",
+        "updatedAt"
+      ])
+      && request.resource.data.acceptedAt is timestamp
+      && request.resource.data.acceptedAt == request.time
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time;
 
       allow update: if signedIn()
-        && resource.data.providerId == request.auth.uid
-        && resource.data.status == "requested"
-        && request.resource.data.status == "rejected"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "rejectedAt",
-               "rejectionReason",
-               "updatedAt"
-             ])
-        && request.resource.data.rejectedAt is timestamp
-        && request.resource.data.rejectedAt == request.time
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time
-        && (
-          !request.resource.data.keys().hasAny(["rejectionReason"])
-          || request.resource.data.rejectionReason is string
-        );
-
-
-      // -------------------------------------------------------
-      // REQUESTED -> CANCELLED
-      // -------------------------------------------------------
+      && resource.data.providerId == request.auth.uid
+      && resource.data.status == "requested"
+      && request.resource.data.status == "rejected"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "rejectedAt",
+        "rejectionReason",
+        "updatedAt"
+      ])
+      && request.resource.data.rejectedAt is timestamp
+      && request.resource.data.rejectedAt == request.time
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time
+      && (
+        !request.resource.data.keys().hasAny(["rejectionReason"])
+        || request.resource.data.rejectionReason is string
+      );
 
       allow update: if signedIn()
-        && resource.data.customerId == request.auth.uid
-        && resource.data.status == "requested"
-        && request.resource.data.status == "cancelled"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "cancelledAt",
-               "cancelledBy",
-               "cancellationReason",
-               "updatedAt"
-             ])
-        && request.resource.data.cancelledAt is timestamp
-        && request.resource.data.cancelledAt == request.time
-        && request.resource.data.cancelledBy is string
-        && request.resource.data.cancelledBy == request.auth.uid
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time
-        && (
-          !request.resource.data.keys().hasAny(["cancellationReason"])
-          || request.resource.data.cancellationReason is string
-        );
-
-
-      // -------------------------------------------------------
-      // ACCEPTED -> IN_PROGRESS
-      // -------------------------------------------------------
+      && resource.data.customerId == request.auth.uid
+      && resource.data.status == "requested"
+      && request.resource.data.status == "cancelled"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "cancelledAt",
+        "cancelledBy",
+        "cancellationReason",
+        "updatedAt"
+      ])
+      && request.resource.data.cancelledAt is timestamp
+      && request.resource.data.cancelledAt == request.time
+      && request.resource.data.cancelledBy is string
+      && request.resource.data.cancelledBy == request.auth.uid
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time
+      && (
+        !request.resource.data.keys().hasAny(["cancellationReason"])
+        || request.resource.data.cancellationReason is string
+      );
 
       allow update: if signedIn()
-        && resource.data.providerId == request.auth.uid
-        && resource.data.status == "accepted"
-        && request.resource.data.status == "in_progress"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "startedAt",
-               "updatedAt"
-             ])
-        && request.resource.data.startedAt is timestamp
-        && request.resource.data.startedAt == request.time
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time;
-
-
-      // -------------------------------------------------------
-      // ACCEPTED -> CANCELLED
-      // -------------------------------------------------------
+      && resource.data.providerId == request.auth.uid
+      && resource.data.status == "accepted"
+      && request.resource.data.status == "in_progress"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "startedAt",
+        "updatedAt"
+      ])
+      && request.resource.data.startedAt is timestamp
+      && request.resource.data.startedAt == request.time
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time;
 
       allow update: if signedIn()
-        && resource.data.customerId == request.auth.uid
-        && resource.data.status == "accepted"
-        && request.resource.data.status == "cancelled"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "cancelledAt",
-               "cancelledBy",
-               "cancellationReason",
-               "updatedAt"
-             ])
-        && request.resource.data.cancelledAt is timestamp
-        && request.resource.data.cancelledAt == request.time
-        && request.resource.data.cancelledBy is string
-        && request.resource.data.cancelledBy == request.auth.uid
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time
-        && (
-          !request.resource.data.keys().hasAny(["cancellationReason"])
-          || request.resource.data.cancellationReason is string
-        );
-
-
-      // -------------------------------------------------------
-      // IN_PROGRESS -> COMPLETED
-      // -------------------------------------------------------
+      && resource.data.customerId == request.auth.uid
+      && resource.data.status == "accepted"
+      && request.resource.data.status == "cancelled"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "cancelledAt",
+        "cancelledBy",
+        "cancellationReason",
+        "updatedAt"
+      ])
+      && request.resource.data.cancelledAt is timestamp
+      && request.resource.data.cancelledAt == request.time
+      && request.resource.data.cancelledBy is string
+      && request.resource.data.cancelledBy == request.auth.uid
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time
+      && (
+        !request.resource.data.keys().hasAny(["cancellationReason"])
+        || request.resource.data.cancellationReason is string
+      );
 
       allow update: if signedIn()
-        && resource.data.providerId == request.auth.uid
-        && resource.data.status == "in_progress"
-        && request.resource.data.status == "completed"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "completedAt",
-               "updatedAt"
-             ])
-        && request.resource.data.completedAt is timestamp
-        && request.resource.data.completedAt == request.time
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time;
-
-
-      // -------------------------------------------------------
-      // IN_PROGRESS -> CANCELLED
-      // -------------------------------------------------------
+      && resource.data.providerId == request.auth.uid
+      && resource.data.status == "in_progress"
+      && request.resource.data.status == "completed"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "completedAt",
+        "updatedAt"
+      ])
+      && request.resource.data.completedAt is timestamp
+      && request.resource.data.completedAt == request.time
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time;
 
       allow update: if signedIn()
-        && resource.data.customerId == request.auth.uid
-        && resource.data.status == "in_progress"
-        && request.resource.data.status == "cancelled"
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly([
-               "status",
-               "cancelledAt",
-               "cancelledBy",
-               "cancellationReason",
-               "updatedAt"
-             ])
-        && request.resource.data.cancelledAt is timestamp
-        && request.resource.data.cancelledAt == request.time
-        && request.resource.data.cancelledBy is string
-        && request.resource.data.cancelledBy == request.auth.uid
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.updatedAt == request.time
-        && (
-          !request.resource.data.keys().hasAny(["cancellationReason"])
-          || request.resource.data.cancellationReason is string
-        );
-
+      && resource.data.customerId == request.auth.uid
+      && resource.data.status == "in_progress"
+      && request.resource.data.status == "cancelled"
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+        "status",
+        "cancelledAt",
+        "cancelledBy",
+        "cancellationReason",
+        "updatedAt"
+      ])
+      && request.resource.data.cancelledAt is timestamp
+      && request.resource.data.cancelledAt == request.time
+      && request.resource.data.cancelledBy is string
+      && request.resource.data.cancelledBy == request.auth.uid
+      && request.resource.data.updatedAt is timestamp
+      && request.resource.data.updatedAt == request.time
+      && (
+        !request.resource.data.keys().hasAny(["cancellationReason"])
+        || request.resource.data.cancellationReason is string
+      );
 
       allow delete: if false;
     }
@@ -536,120 +487,102 @@ service cloud.firestore {
     match /calls/{callId} {
 
       allow read: if signedIn()
-        && (
-          resource.data.callerId == request.auth.uid
-          || resource.data.calleeId == request.auth.uid
-        );
+      && (
+        resource.data.callerId == request.auth.uid
+        || resource.data.calleeId == request.auth.uid
+      );
 
-
-      // -------------------------------------------------------
-      // INCOMING CALL
-      // /calls/{calleeUid}
-      // -------------------------------------------------------
-
+      // Incoming call: document ID is the callee UID.
       allow create: if signedIn()
-        && callId == request.resource.data.calleeId
-        && request.resource.data.callerId == request.auth.uid
-        && request.resource.data.calleeId != request.auth.uid
-        && request.resource.data.keys().hasOnly([
-          "callId",
-          "callerId",
-          "calleeId",
-          "callerName",
-          "callerPhotoUrl",
-          "channelName",
-          "serviceTitle",
-          "status"
-        ])
-        && request.resource.data.callId is string
-        && request.resource.data.callerId is string
-        && request.resource.data.calleeId is string
-        && request.resource.data.callerName is string
-        && request.resource.data.callerPhotoUrl is string
-        && request.resource.data.channelName is string
-        && request.resource.data.serviceTitle is string
-        && request.resource.data.status == "ringing"
-        && request.resource.data.channelName == request.resource.data.callId;
+      && callId == request.resource.data.calleeId
+      && request.resource.data.callerId == request.auth.uid
+      && request.resource.data.calleeId != request.auth.uid
+      && request.resource.data.keys().hasOnly([
+        "callId",
+        "callerId",
+        "calleeId",
+        "callerName",
+        "callerPhotoUrl",
+        "channelName",
+        "serviceTitle",
+        "status"
+      ])
+      && request.resource.data.callId is string
+      && request.resource.data.callerId is string
+      && request.resource.data.calleeId is string
+      && request.resource.data.callerName is string
+      && request.resource.data.callerPhotoUrl is string
+      && request.resource.data.channelName is string
+      && request.resource.data.serviceTitle is string
+      && request.resource.data.status == "ringing"
+      && request.resource.data.channelName == request.resource.data.callId;
 
-
-      // -------------------------------------------------------
-      // CALLER STATE
-      // /calls/{callerUid}
-      // -------------------------------------------------------
-
+      // Caller-side state: document ID is the caller UID.
       allow create: if signedIn()
-        && callId == request.auth.uid
-        && request.resource.data.callerId == request.auth.uid
-        && request.resource.data.calleeId is string
-        && request.resource.data.calleeId != request.auth.uid
-        && request.resource.data.otherUserId == request.resource.data.calleeId
-        && request.resource.data.keys().hasOnly([
-          "callId",
-          "callerId",
-          "calleeId",
-          "otherUserId",
-          "channelName",
-          "status"
-        ])
-        && request.resource.data.callId is string
-        && request.resource.data.callerId is string
-        && request.resource.data.calleeId is string
-        && request.resource.data.otherUserId is string
-        && request.resource.data.channelName is string
-        && request.resource.data.status == "calling"
-        && request.resource.data.channelName == request.resource.data.callId;
-
-
-      // -------------------------------------------------------
-      // CALL UPDATE
-      // -------------------------------------------------------
+      && callId == request.auth.uid
+      && request.resource.data.callerId == request.auth.uid
+      && request.resource.data.calleeId is string
+      && request.resource.data.calleeId != request.auth.uid
+      && request.resource.data.otherUserId == request.resource.data.calleeId
+      && request.resource.data.keys().hasOnly([
+        "callId",
+        "callerId",
+        "calleeId",
+        "otherUserId",
+        "channelName",
+        "status"
+      ])
+      && request.resource.data.callId is string
+      && request.resource.data.callerId is string
+      && request.resource.data.calleeId is string
+      && request.resource.data.otherUserId is string
+      && request.resource.data.channelName is string
+      && request.resource.data.status == "calling"
+      && request.resource.data.channelName == request.resource.data.callId;
 
       allow update: if signedIn()
-        && request.resource.data.diff(resource.data)
-             .affectedKeys()
-             .hasOnly([
-               "status"
-             ])
-        && (
-          (
-            resource.data.callerId == request.auth.uid
-            && resource.data.status == "ringing"
-            && request.resource.data.status == "cancelled"
-          )
-          ||
-          (
-            resource.data.calleeId == request.auth.uid
-            && resource.data.status == "ringing"
-            && request.resource.data.status == "accepted"
-          )
-          ||
-          (
-            resource.data.calleeId == request.auth.uid
-            && resource.data.status == "ringing"
-            && request.resource.data.status == "declined"
-          )
-          ||
-          (
-            resource.data.callerId == callId
-            && resource.data.calleeId == request.auth.uid
-            && resource.data.status == "calling"
-            && request.resource.data.status == "accepted"
-          )
-          ||
-          (
-            resource.data.callerId == callId
-            && resource.data.calleeId == request.auth.uid
-            && resource.data.status == "calling"
-            && request.resource.data.status == "declined"
-          )
-        );
-
+      && request.resource.data.diff(resource.data)
+        .affectedKeys()
+        .hasOnly(["status"])
+      && (
+        (
+          resource.data.callerId == request.auth.uid
+          && resource.data.status == "ringing"
+          && request.resource.data.status == "cancelled"
+        )
+        ||
+        (
+          resource.data.calleeId == request.auth.uid
+          && resource.data.status == "ringing"
+          && request.resource.data.status == "accepted"
+        )
+        ||
+        (
+          resource.data.calleeId == request.auth.uid
+          && resource.data.status == "ringing"
+          && request.resource.data.status == "declined"
+        )
+        ||
+        (
+          resource.data.callerId == callId
+          && resource.data.calleeId == request.auth.uid
+          && resource.data.status == "calling"
+          && request.resource.data.status == "accepted"
+        )
+        ||
+        (
+          resource.data.callerId == callId
+          && resource.data.calleeId == request.auth.uid
+          && resource.data.status == "calling"
+          && request.resource.data.status == "declined"
+        )
+      );
 
       allow delete: if signedIn()
-        && (
-          resource.data.callerId == request.auth.uid
-          || resource.data.calleeId == request.auth.uid
-        );
+      && (
+        resource.data.callerId == request.auth.uid
+        || resource.data.calleeId == request.auth.uid
+      );
     }
 
 
@@ -660,29 +593,29 @@ service cloud.firestore {
     match /complaints/{complaintId} {
 
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "serviceId",
-          "reporterId",
-          "targetUserId",
-          "reason",
-          "timestamp"
-        ])
-        && request.resource.data.keys().hasAll([
-          "serviceId",
-          "reporterId",
-          "targetUserId",
-          "reason",
-          "timestamp"
-        ])
-        && request.resource.data.reporterId == request.auth.uid
-        && request.resource.data.serviceId is string
-        && request.resource.data.targetUserId is string
-        && request.resource.data.reason is string
-        && request.resource.data.timestamp is int
-        && request.resource.data.targetUserId != request.auth.uid
-        && get(
-             /databases/$(database)/documents/services/$(request.resource.data.serviceId)
-           ).data.userId == request.resource.data.targetUserId;
+      && request.resource.data.keys().hasOnly([
+        "serviceId",
+        "reporterId",
+        "targetUserId",
+        "reason",
+        "timestamp"
+      ])
+      && request.resource.data.keys().hasAll([
+        "serviceId",
+        "reporterId",
+        "targetUserId",
+        "reason",
+        "timestamp"
+      ])
+      && request.resource.data.reporterId == request.auth.uid
+      && request.resource.data.serviceId is string
+      && request.resource.data.targetUserId is string
+      && request.resource.data.reason is string
+      && request.resource.data.timestamp is int
+      && request.resource.data.targetUserId != request.auth.uid
+      && get(
+        /databases/$(database)/documents/services/$(request.resource.data.serviceId)
+      ).data.userId == request.resource.data.targetUserId;
 
       allow read, update, delete: if false;
     }

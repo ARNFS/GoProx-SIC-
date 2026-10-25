@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FirebaseService {
+
     private final FirebaseFirestore db;
 
     public interface ServiceCallback {
@@ -26,25 +27,30 @@ public class FirebaseService {
     }
 
     public void getAllServices(ServiceCallback callback) {
-        if (callback == null) return;
+        if (callback == null) {
+            return;
+        }
 
         db.collection("services")
                 .get()
-                .addOnCompleteListener(task -> {
+                .addOnSuccessListener(snapshot -> {
                     List<Service> services = new ArrayList<>();
-                    if (task.isSuccessful() && task.getResult() != null) {
-                        for (QueryDocumentSnapshot document : task.getResult()) {
+
+                    if (snapshot != null) {
+                        for (QueryDocumentSnapshot document : snapshot) {
                             Service service = parseQueryDocument(document);
+
                             if (service != null) {
                                 services.add(service);
                             }
                         }
                     }
+
                     callback.onCallback(services);
                 })
-                .addOnFailureListener(e -> {
-                    callback.onCallback(new ArrayList<>());
-                });
+                .addOnFailureListener(error ->
+                        callback.onCallback(new ArrayList<>())
+                );
     }
 
     public void getAllServicesWithTags(ServiceCallback callback) {
@@ -52,141 +58,228 @@ public class FirebaseService {
     }
 
     public void getServiceById(String serviceId, ServiceCallback callback) {
-        if (callback == null || serviceId == null) return;
+        if (callback == null || serviceId == null || serviceId.trim().isEmpty()) {
+            if (callback != null) {
+                callback.onCallback(new ArrayList<>());
+            }
+            return;
+        }
 
-        db.collection("services").document(serviceId)
+        db.collection("services")
+                .document(serviceId)
                 .get()
                 .addOnSuccessListener(document -> {
                     List<Service> services = new ArrayList<>();
+
                     if (document != null && document.exists()) {
                         Service service = parseDocumentSnapshot(document);
+
                         if (service != null) {
                             services.add(service);
                         }
                     }
+
                     callback.onCallback(services);
                 })
-                .addOnFailureListener(e -> {
-                    callback.onCallback(new ArrayList<>());
-                });
+                .addOnFailureListener(error ->
+                        callback.onCallback(new ArrayList<>())
+                );
     }
 
     public void deleteService(String serviceId, OnDeleteListener listener) {
-        if (serviceId == null) {
-            if (listener != null) listener.onFailure("Service ID is null");
+        if (serviceId == null || serviceId.trim().isEmpty()) {
+            if (listener != null) {
+                listener.onFailure("Service ID is missing");
+            }
             return;
         }
 
-        db.collection("services").document(serviceId)
-                .delete()
-                .addOnSuccessListener(aVoid -> {
-                    if (listener != null) listener.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    if (listener != null) {
-                        listener.onFailure(e.getMessage() != null ? e.getMessage() : "Delete failed");
-                    }
-                });
-    }
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
 
-    public void deleteAllServices(OnDeleteListener listener) {
+        if (currentUser == null) {
+            if (listener != null) {
+                listener.onFailure("User not signed in");
+            }
+            return;
+        }
+
         db.collection("services")
+                .document(serviceId)
                 .get()
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful() && task.getResult() != null) {
-                        int size = task.getResult().size();
-                        if (size == 0) {
-                            if (listener != null) listener.onSuccess();
-                            return;
-                        }
-                        for (QueryDocumentSnapshot doc : task.getResult()) {
-                            doc.getReference().delete();
-                        }
-                        if (listener != null) listener.onSuccess();
-                    } else {
+                .addOnSuccessListener(document -> {
+                    if (document == null || !document.exists()) {
                         if (listener != null) {
-                            String error = task.getException() != null
-                                    ? task.getException().getMessage()
-                                    : "Failed to get services";
-                            listener.onFailure(error);
+                            listener.onFailure("Service not found");
                         }
+                        return;
+                    }
+
+                    String ownerId = document.getString("userId");
+
+                    if (ownerId == null || !ownerId.equals(currentUser.getUid())) {
+                        if (listener != null) {
+                            listener.onFailure("You can delete only your own service");
+                        }
+                        return;
+                    }
+
+                    document.getReference()
+                            .delete()
+                            .addOnSuccessListener(unused -> {
+                                if (listener != null) {
+                                    listener.onSuccess();
+                                }
+                            })
+                            .addOnFailureListener(error -> {
+                                if (listener != null) {
+                                    listener.onFailure(getErrorMessage(
+                                            error,
+                                            "Delete failed"
+                                    ));
+                                }
+                            });
+                })
+                .addOnFailureListener(error -> {
+                    if (listener != null) {
+                        listener.onFailure(getErrorMessage(
+                                error,
+                                "Could not verify service ownership"
+                        ));
                     }
                 });
     }
 
+    /**
+     * This method is retained for compatibility with existing callers.
+     * It deletes only services owned by the currently signed-in user.
+     */
     public void deleteMyServices(OnDeleteListener listener) {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+
         if (currentUser == null) {
-            if (listener != null) listener.onFailure("User not signed in");
+            if (listener != null) {
+                listener.onFailure("User not signed in");
+            }
             return;
         }
 
-        String currentUserId = currentUser.getUid();
         db.collection("services")
-                .whereEqualTo("userId", currentUserId)
+                .whereEqualTo("userId", currentUser.getUid())
                 .get()
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful() && task.getResult() != null) {
-                        int size = task.getResult().size();
-                        if (size == 0) {
-                            if (listener != null) listener.onSuccess();
-                            return;
-                        }
-                        for (QueryDocumentSnapshot doc : task.getResult()) {
-                            doc.getReference().delete();
-                        }
-                        if (listener != null) listener.onSuccess();
-                    } else {
+                .addOnSuccessListener(snapshot -> {
+                    if (snapshot == null || snapshot.isEmpty()) {
                         if (listener != null) {
-                            String error = task.getException() != null
-                                    ? task.getException().getMessage()
-                                    : "Failed to get services";
-                            listener.onFailure(error);
+                            listener.onSuccess();
                         }
+                        return;
+                    }
+
+                    com.google.firebase.firestore.WriteBatch batch = db.batch();
+
+                    for (QueryDocumentSnapshot document : snapshot) {
+                        batch.delete(document.getReference());
+                    }
+
+                    batch.commit()
+                            .addOnSuccessListener(unused -> {
+                                if (listener != null) {
+                                    listener.onSuccess();
+                                }
+                            })
+                            .addOnFailureListener(error -> {
+                                if (listener != null) {
+                                    listener.onFailure(getErrorMessage(
+                                            error,
+                                            "Failed to delete your services"
+                                    ));
+                                }
+                            });
+                })
+                .addOnFailureListener(error -> {
+                    if (listener != null) {
+                        listener.onFailure(getErrorMessage(
+                                error,
+                                "Failed to load your services"
+                        ));
                     }
                 });
     }
 
-    private Service parseQueryDocument(QueryDocumentSnapshot doc) {
-        if (doc == null) return null;
-        return parseData(doc.getId(), doc);
+    /**
+     * Retained to avoid breaking existing source references.
+     * Bulk deletion of every user's services is intentionally disabled.
+     */
+    public void deleteAllServices(OnDeleteListener listener) {
+        if (listener != null) {
+            listener.onFailure(
+                    "Deleting every user's services is disabled for safety. " +
+                            "Use deleteMyServices() instead."
+            );
+        }
     }
 
-    private Service parseDocumentSnapshot(DocumentSnapshot doc) {
-        if (doc == null) return null;
-        return parseData(doc.getId(), doc);
+    private Service parseQueryDocument(QueryDocumentSnapshot document) {
+        if (document == null) {
+            return null;
+        }
+
+        return parseData(document.getId(), document);
+    }
+
+    private Service parseDocumentSnapshot(DocumentSnapshot document) {
+        if (document == null) {
+            return null;
+        }
+
+        return parseData(document.getId(), document);
     }
 
     private Service parseData(String serviceId, DocumentSnapshot document) {
-        if (document == null) return null;
+        if (document == null) {
+            return null;
+        }
 
         try {
             String name = document.getString("name");
             String profession = document.getString("profession");
             String description = document.getString("description");
-            String price = document.getString("price");
+
+            // Supports both the current numeric price and legacy string prices.
+            Object rawPrice = document.get("price");
+            String price = convertPriceToString(rawPrice);
+
             String priceType = document.getString("priceType");
-            Double rating = document.getDouble("rating");
-            Long ratingCountLong = document.getLong("ratingCount");
+
+            Double rating = readDouble(document, "rating");
+            Long ratingCountLong = readLong(document, "ratingCount");
+
             String userId = document.getString("userId");
-            @SuppressWarnings("unchecked")
-            List<String> tags = (List<String>) document.get("tags");
+
+            List<String> tags = readStringList(document.get("tags"));
+
             String imageUrl = document.getString("imageUrl");
             String country = document.getString("country");
             String city = document.getString("city");
-            Double latitude = document.getDouble("latitude");
-            Double longitude = document.getDouble("longitude");
 
-            if (tags == null) tags = new ArrayList<>();
-            int ratingCount = ratingCountLong != null ? ratingCountLong.intValue() : 0;
-            float ratingValue = rating != null ? rating.floatValue() : 0f;
+            Double latitude = readDouble(document, "latitude");
+            Double longitude = readDouble(document, "longitude");
+
+            int ratingCount = ratingCountLong != null
+                    ? Math.max(0, ratingCountLong.intValue())
+                    : 0;
+
+            float ratingValue = rating != null
+                    ? rating.floatValue()
+                    : 0f;
+
+            ratingValue = Math.max(0f, Math.min(5f, ratingValue));
 
             Service service = new Service(
                     serviceId,
                     name != null ? name : "Unknown",
                     profession != null ? profession : "Unknown",
                     description != null ? description : "",
-                    price != null ? price : "$0",
+                    price,
                     ratingValue,
                     ratingCount,
                     imageUrl,
@@ -197,10 +290,106 @@ public class FirebaseService {
                     country,
                     city
             );
-            if (priceType != null) service.setPriceType(priceType);
+
+            if (priceType != null && !priceType.trim().isEmpty()) {
+                service.setPriceType(priceType);
+            }
+
             return service;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String convertPriceToString(Object rawPrice) {
+        if (rawPrice == null) {
+            return "0";
+        }
+
+        if (rawPrice instanceof Number) {
+            double value = ((Number) rawPrice).doubleValue();
+
+            if (!Double.isFinite(value)) {
+                return "0";
+            }
+
+            if (value == Math.rint(value)) {
+                return String.valueOf((long) value);
+            }
+
+            return String.valueOf(value);
+        }
+
+        if (rawPrice instanceof String) {
+            String value = ((String) rawPrice).trim();
+            return value.isEmpty() ? "0" : value;
+        }
+
+        return "0";
+    }
+
+    private Double readDouble(DocumentSnapshot document, String field) {
+        Object value = document.get(field);
+
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+
+        if (value instanceof String) {
+            try {
+                return Double.parseDouble(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private Long readLong(DocumentSnapshot document, String field) {
+        Object value = document.get(field);
+
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+
+        if (value instanceof String) {
+            try {
+                return Long.parseLong(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private List<String> readStringList(Object rawTags) {
+        List<String> result = new ArrayList<>();
+
+        if (!(rawTags instanceof List<?>)) {
+            return result;
+        }
+
+        for (Object item : (List<?>) rawTags) {
+            if (item instanceof String) {
+                String tag = ((String) item).trim();
+
+                if (!tag.isEmpty()) {
+                    result.add(tag);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private String getErrorMessage(Exception error, String fallback) {
+        if (error == null || error.getMessage() == null
+                || error.getMessage().trim().isEmpty()) {
+            return fallback;
+        }
+
+        return error.getMessage();
     }
 }
