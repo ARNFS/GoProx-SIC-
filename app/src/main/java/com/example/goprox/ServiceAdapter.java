@@ -81,7 +81,13 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             } catch (Exception ignored) {}
         }
         if (holder.tvPrice != null) {
-            holder.tvPrice.setText(service.getPrice() != null ? service.getPrice() : "");
+            String price = service.getPrice() != null ? service.getPrice() : "";
+            String priceType = service.getPriceType();
+            holder.tvPrice.setText(
+                    priceType != null && !priceType.trim().isEmpty()
+                            ? price + " / " + priceType.trim()
+                            : price
+            );
         }
         if (holder.ratingBar != null) {
             holder.ratingBar.setRating(service.getRating());

@@ -295,9 +295,12 @@ public class ServiceDetailActivity extends BaseActivity {
         }
 
         if (tvPrice != null) {
-            tvPrice.setText(
-                    price != null ? price : ""
-            );
+            String displayedPrice = price != null ? price : "";
+            if (servicePriceType != null
+                    && !servicePriceType.trim().isEmpty()) {
+                displayedPrice += " / " + servicePriceType.trim();
+            }
+            tvPrice.setText(displayedPrice);
         }
 
         if (ratingBar != null) {

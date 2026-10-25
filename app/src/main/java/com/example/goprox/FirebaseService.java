@@ -1,3 +1,4 @@
+
 package com.example.goprox;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -58,7 +59,8 @@ public class FirebaseService {
     }
 
     public void getServiceById(String serviceId, ServiceCallback callback) {
-        if (callback == null || serviceId == null || serviceId.trim().isEmpty()) {
+        if (callback == null || serviceId == null
+                || serviceId.trim().isEmpty()) {
             if (callback != null) {
                 callback.onCallback(new ArrayList<>());
             }
@@ -116,9 +118,12 @@ public class FirebaseService {
 
                     String ownerId = document.getString("userId");
 
-                    if (ownerId == null || !ownerId.equals(currentUser.getUid())) {
+                    if (ownerId == null
+                            || !ownerId.equals(currentUser.getUid())) {
                         if (listener != null) {
-                            listener.onFailure("You can delete only your own service");
+                            listener.onFailure(
+                                    "You can delete only your own service"
+                            );
                         }
                         return;
                     }
@@ -150,8 +155,7 @@ public class FirebaseService {
     }
 
     /**
-     * This method is retained for compatibility with existing callers.
-     * It deletes only services owned by the currently signed-in user.
+     * Deletes only services owned by the currently signed-in user.
      */
     public void deleteMyServices(OnDeleteListener listener) {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
@@ -206,14 +210,13 @@ public class FirebaseService {
     }
 
     /**
-     * Retained to avoid breaking existing source references.
      * Bulk deletion of every user's services is intentionally disabled.
      */
     public void deleteAllServices(OnDeleteListener listener) {
         if (listener != null) {
             listener.onFailure(
-                    "Deleting every user's services is disabled for safety. " +
-                            "Use deleteMyServices() instead."
+                    "Deleting every user's services is disabled for safety. "
+                            + "Use deleteMyServices() instead."
             );
         }
     }
@@ -244,9 +247,9 @@ public class FirebaseService {
             String profession = document.getString("profession");
             String description = document.getString("description");
 
-            // Supports both the current numeric price and legacy string prices.
+            // Supports numeric prices and legacy string prices.
             Object rawPrice = document.get("price");
-            String price = convertPriceToString(rawPrice);
+            String price = ServicePriceParser.toPriceString(rawPrice);
 
             String priceType = document.getString("priceType");
 
@@ -299,33 +302,6 @@ public class FirebaseService {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    private String convertPriceToString(Object rawPrice) {
-        if (rawPrice == null) {
-            return "0";
-        }
-
-        if (rawPrice instanceof Number) {
-            double value = ((Number) rawPrice).doubleValue();
-
-            if (!Double.isFinite(value)) {
-                return "0";
-            }
-
-            if (value == Math.rint(value)) {
-                return String.valueOf((long) value);
-            }
-
-            return String.valueOf(value);
-        }
-
-        if (rawPrice instanceof String) {
-            String value = ((String) rawPrice).trim();
-            return value.isEmpty() ? "0" : value;
-        }
-
-        return "0";
     }
 
     private Double readDouble(DocumentSnapshot document, String field) {
