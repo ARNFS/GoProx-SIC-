@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbarProviderPlans"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/primary"
+        android:elevation="4dp"
+        android:title="Provider plans"
+        android:titleTextColor="@color/white" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Grow your reach"
+                android:textColor="@color/black"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvProviderPlanStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Checking Google Play plans…"
+                android:textColor="@color/dark_gray"
+                android:textSize="15sp"
+                android:accessibilityLiveRegion="polite" />
+
+            <TextView
+                android:id="@+id/tvProviderPlanDisclosure"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Your profile, standard listings, requests and chat stay free. Paid plans add clearly labeled Sponsored placement. Subscriptions renew monthly unless canceled in Google Play. Promotion cannot guarantee requests, bookings, or income, and sponsored listings still follow search and location filters."
+                android:textColor="@color/dark_gray"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnProviderPlanTerms"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Subscription terms"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnProviderPlanPrivacy"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Privacy policy"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnProviderPlanSupport"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Refund and support"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/llProviderPlanCards"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="16dp" />
+
+            <Button
+                android:id="@+id/btnRestoreProviderPlan"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="16dp"
+                android:text="Restore purchases" />
+
+            <Button
+                android:id="@+id/btnManageProviderPlan"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="8dp"
+                android:text="Manage subscriptions in Google Play" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
