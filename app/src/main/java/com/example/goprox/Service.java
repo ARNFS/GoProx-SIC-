@@ -21,6 +21,7 @@ public class Service {
 
     private float rating;
     private int ratingCount;
+    private boolean ratingVerified;
 
     private String imageUrl;
     private String userId;
@@ -147,7 +148,7 @@ public class Service {
     }
 
     public float getRating() {
-        return rating;
+        return ratingVerified ? rating : 0f;
     }
 
     public void setRating(float rating) {
@@ -155,11 +156,19 @@ public class Service {
     }
 
     public int getRatingCount() {
-        return ratingCount;
+        return ratingVerified ? ratingCount : 0;
     }
 
     public void setRatingCount(int ratingCount) {
         this.ratingCount = Math.max(0, ratingCount);
+    }
+
+    public boolean isRatingVerified() {
+        return ratingVerified;
+    }
+
+    public void setRatingVerified(boolean ratingVerified) {
+        this.ratingVerified = ratingVerified;
     }
 
     public String getImageUrl() {

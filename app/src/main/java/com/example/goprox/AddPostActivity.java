@@ -830,6 +830,7 @@ public class AddPostActivity extends BaseActivity {
 
             service.put("rating", 0.0);
             service.put("ratingCount", 0L);
+            service.put("ratingVerified", true);
 
             service.put(
                     "createdAt",
@@ -846,6 +847,7 @@ public class AddPostActivity extends BaseActivity {
                     .addOnSuccessListener(documentReference -> {
 
                         setSubmittingState(false);
+                        GoProxAnalytics.logProviderListingCreated(this);
 
                         Toast.makeText(
                                 this,

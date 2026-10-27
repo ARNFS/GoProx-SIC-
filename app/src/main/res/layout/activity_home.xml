@@ -61,16 +61,21 @@
                 android:layout_weight="1"
                 android:hint="Search..."
                 android:inputType="text"
+                android:singleLine="true"
+                android:imeOptions="actionSearch"
+                android:contentDescription="Search services by name or profession"
                 android:padding="12dp"
                 android:background="@drawable/bg_message_input" />
 
             <!-- AI կոճակ -->
             <ImageView
                 android:id="@+id/ivAIToggle"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:src="@drawable/ic_ai"
                 android:padding="6dp"
+                android:contentDescription="Find a service with GoProx AI"
+                android:focusable="true"
                 android:layout_marginStart="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 app:tint="@color/primary" />
@@ -78,10 +83,12 @@
             <!-- FILTER կոճակ (ՔՈ PNG) -->
             <ImageView
                 android:id="@+id/ivFilter"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:src="@drawable/qashac"
                 android:padding="6dp"
+                android:contentDescription="Filter and sort services"
+                android:focusable="true"
                 android:layout_marginStart="2dp"
                 android:background="?attr/selectableItemBackgroundBorderless" />
 
@@ -96,23 +103,54 @@
         <LinearLayout
             android:id="@+id/llNotFound"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical"
+            android:padding="24dp"
             android:gravity="center"
             android:visibility="gone">
 
+            <ProgressBar
+                android:id="@+id/pbServicesLoading"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:visibility="gone" />
+
             <ImageView
+                android:id="@+id/ivEmptyState"
                 android:layout_width="80dp"
                 android:layout_height="80dp"
                 android:src="@drawable/ic_not_found"
-                app:tint="@color/gray" />
+                android:contentDescription=""
+                app:tint="@color/primary" />
 
             <TextView
+                android:id="@+id/tvEmptyTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="No specialists found"
-                android:textSize="16sp"
-                android:textColor="@color/gray"
+                android:text="No matching services yet"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:textColor="@color/black"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvEmptyMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Try a different search or clear your filters."
+                android:textSize="15sp"
+                android:gravity="center"
+                android:textColor="@color/dark_gray"
+                android:layout_marginTop="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnEmptyAction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="Clear search and filters"
                 android:layout_marginTop="16dp" />
         </LinearLayout>
     </LinearLayout>

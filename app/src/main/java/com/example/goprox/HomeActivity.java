@@ -15,6 +15,7 @@ import android.widget.EditText;
 import androidx.core.content.ContextCompat;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.RatingBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -38,6 +39,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.Timestamp;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -60,6 +62,10 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
     private EditText etSearch;
     private ImageView ivAIToggle, ivFilter;
     private LinearLayout llNotFound;
+    private TextView tvEmptyTitle, tvEmptyMessage;
+    private ImageView ivEmptyState;
+    private Button btnEmptyAction;
+    private ProgressBar pbServicesLoading;
 
     private final List<Service> serviceList = new ArrayList<>();
     private final List<Service> originalServiceList = new ArrayList<>();
@@ -70,6 +76,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private final Map<String, Service> markerServiceMap = new HashMap<>();
+    private final Set<String> sponsoredServiceIds = new HashSet<>();
 
     private Set<String> selectedProfessions = new HashSet<>();
     private int minPrice = -1, maxPrice = -1;
@@ -77,6 +84,8 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
     private String filterCity = "", filterCountry = "";
     private int sortBy = 0;
     private boolean isFiltered = false;
+    private boolean isLoadingServices;
+    private boolean serviceLoadFailed;
 
     private List<String> cityList = new ArrayList<>();
     private List<String> countryList = new ArrayList<>();
@@ -103,6 +112,36 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         setupBottomNavigation();
         setupItemClickListener();
         setupLongClickListener();
+        GoProxAnalytics.logHomeOpened(this);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadActivePromotions();
+    }
+
+    private void loadActivePromotions() {
+        FirebaseFirestore.getInstance().collection("servicePromotions")
+                .whereGreaterThan("expiresAt", Timestamp.now())
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    sponsoredServiceIds.clear();
+                    for (com.google.firebase.firestore.DocumentSnapshot document : snapshot.getDocuments()) {
+                        sponsoredServiceIds.add(document.getId());
+                    }
+                    if (serviceAdapter != null) {
+                        serviceAdapter.setSponsoredServiceIds(sponsoredServiceIds);
+                        synchronized (serviceList) {
+                            applySorting(serviceList);
+                            serviceAdapter.updateList(new ArrayList<>(serviceList));
+                        }
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    sponsoredServiceIds.clear();
+                    if (serviceAdapter != null) serviceAdapter.setSponsoredServiceIds(sponsoredServiceIds);
+                });
     }
 
     @Override
@@ -150,6 +189,11 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         ivAIToggle = findViewById(R.id.ivAIToggle);
         ivFilter = findViewById(R.id.ivFilter);
         llNotFound = findViewById(R.id.llNotFound);
+        tvEmptyTitle = findViewById(R.id.tvEmptyTitle);
+        tvEmptyMessage = findViewById(R.id.tvEmptyMessage);
+        ivEmptyState = findViewById(R.id.ivEmptyState);
+        btnEmptyAction = findViewById(R.id.btnEmptyAction);
+        pbServicesLoading = findViewById(R.id.pbServicesLoading);
 
         if (recyclerView == null || bottomNavigationView == null) {
             Toast.makeText(this, "UI initialization error", Toast.LENGTH_SHORT).show();
@@ -274,6 +318,8 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
             return;
         }
 
+        GoProxAnalytics.logServiceDetailOpened(this);
+
         Intent intent = new Intent(this, ServiceDetailActivity.class);
         intent.putExtra("serviceId", service.getId());
         intent.putExtra("name", service.getName());
@@ -283,6 +329,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         intent.putExtra("priceType", service.getPriceType());
         intent.putExtra("rating", service.getRating());
         intent.putExtra("ratingCount", service.getRatingCount());
+        intent.putExtra("ratingVerified", service.isRatingVerified());
         intent.putExtra("imageUrl", service.getImageUrl());
         intent.putExtra("userId", service.getUserId());
         intent.putExtra("country", service.getCountry());
@@ -320,7 +367,16 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
             return;
         }
 
-        firebaseService.getAllServices(services -> runOnUiThread(() -> {
+        isLoadingServices = true;
+        serviceLoadFailed = false;
+        updateEmptyView();
+
+        firebaseService.getAllServicesWithResult(new FirebaseService.ServiceResultCallback() {
+            @Override
+            public void onSuccess(List<Service> services) {
+                runOnUiThread(() -> {
+                    isLoadingServices = false;
+                    serviceLoadFailed = false;
             synchronized (originalServiceList) {
                 originalServiceList.clear();
 
@@ -347,7 +403,18 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
 
             updateEmptyView();
             addMarkersToMap();
-        }));
+                });
+            }
+
+            @Override
+            public void onFailure(Exception error) {
+                runOnUiThread(() -> {
+                    isLoadingServices = false;
+                    serviceLoadFailed = true;
+                    updateEmptyView();
+                });
+            }
+        });
     }
 
     private void applyAiFilter() {
@@ -493,6 +560,12 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         switch (sortBy) {
             case 0:
                 Collections.sort(list, (a, b) ->
+                        compareDefaultMarketplaceOrder(a, b)
+                );
+                break;
+
+            case 1:
+                Collections.sort(list, (a, b) ->
                         Float.compare(
                                 b != null ? b.getRating() : 0,
                                 a != null ? a.getRating() : 0
@@ -500,7 +573,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 );
                 break;
 
-            case 1:
+            case 2:
                 Collections.sort(list, (a, b) ->
                         Float.compare(
                                 a != null ? a.getRating() : 0,
@@ -509,17 +582,17 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 );
                 break;
 
-            case 2:
+            case 3:
                 list.sort(Comparator.comparingDouble(this::extractPrice));
                 break;
 
-            case 3:
+            case 4:
                 list.sort((a, b) ->
                         Double.compare(extractPrice(b), extractPrice(a))
                 );
                 break;
 
-            case 4:
+            case 5:
                 list.sort((a, b) ->
                         safeString(a != null ? a.getName() : "")
                                 .compareToIgnoreCase(
@@ -528,7 +601,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 );
                 break;
 
-            case 5:
+            case 6:
                 list.sort((a, b) ->
                         safeString(b != null ? b.getName() : "")
                                 .compareToIgnoreCase(
@@ -537,6 +610,18 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
                 );
                 break;
         }
+    }
+
+    private int compareDefaultMarketplaceOrder(Service left, Service right) {
+        boolean leftSponsored = left != null && left.getId() != null
+                && sponsoredServiceIds.contains(left.getId());
+        boolean rightSponsored = right != null && right.getId() != null
+                && sponsoredServiceIds.contains(right.getId());
+        if (leftSponsored != rightSponsored) return leftSponsored ? -1 : 1;
+        return Float.compare(
+                right != null ? right.getRating() : 0,
+                left != null ? left.getRating() : 0
+        );
     }
 
     /**
@@ -572,13 +657,85 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
             return;
         }
 
+        if (pbServicesLoading != null) {
+            pbServicesLoading.setVisibility(isLoadingServices ? View.VISIBLE : View.GONE);
+        }
+
+        if (isLoadingServices) {
+            recyclerView.setVisibility(View.GONE);
+            llNotFound.setVisibility(View.VISIBLE);
+            if (tvEmptyTitle != null) tvEmptyTitle.setVisibility(View.GONE);
+            if (tvEmptyMessage != null) tvEmptyMessage.setVisibility(View.GONE);
+            if (ivEmptyState != null) ivEmptyState.setVisibility(View.GONE);
+            if (btnEmptyAction != null) btnEmptyAction.setVisibility(View.GONE);
+            return;
+        }
+
         if (serviceList.isEmpty()) {
             recyclerView.setVisibility(View.GONE);
             llNotFound.setVisibility(View.VISIBLE);
+            if (ivEmptyState != null) ivEmptyState.setVisibility(View.VISIBLE);
+            boolean hasFilters = (etSearch != null && !etSearch.getText().toString().trim().isEmpty())
+                    || isFiltered || (aiFilterList != null && !aiFilterList.isEmpty());
+            boolean noListings = originalServiceList.isEmpty() && !serviceLoadFailed && !hasFilters;
+
+            if (tvEmptyTitle != null) {
+                tvEmptyTitle.setVisibility(View.VISIBLE);
+                tvEmptyTitle.setText(serviceLoadFailed
+                        ? "Couldn't load services"
+                        : noListings ? "Your next great find starts here"
+                        : "No matching services yet");
+            }
+            if (tvEmptyMessage != null) {
+                tvEmptyMessage.setVisibility(View.VISIBLE);
+                tvEmptyMessage.setText(serviceLoadFailed
+                        ? "Check your connection and try again."
+                        : noListings
+                        ? "No providers have listed a service here yet. You can be the first to offer one."
+                        : "Try a different search or clear your filters to see more providers.");
+            }
+            if (btnEmptyAction != null) {
+                btnEmptyAction.setVisibility(View.VISIBLE);
+                btnEmptyAction.setText(serviceLoadFailed
+                        ? "Try again"
+                        : noListings ? "Offer a service"
+                        : hasFilters ? "Clear search and filters" : "Offer a service");
+                btnEmptyAction.setOnClickListener(v -> {
+                    if (serviceLoadFailed) {
+                        loadServicesFromFirebase();
+                    } else if (noListings) {
+                        startActivity(new Intent(this, AddPostActivity.class));
+                    } else if (hasFilters) {
+                        clearSearchAndFilters();
+                    }
+                });
+            }
         } else {
             recyclerView.setVisibility(View.VISIBLE);
             llNotFound.setVisibility(View.GONE);
         }
+    }
+
+    private void clearSearchAndFilters() {
+        if (etSearch != null) etSearch.setText("");
+        aiFilterList = null;
+        selectedProfessions.clear();
+        minPrice = -1;
+        maxPrice = -1;
+        minRating = 0;
+        filterCity = "";
+        filterCountry = "";
+        sortBy = 0;
+        isFiltered = false;
+
+        synchronized (serviceList) {
+            serviceList.clear();
+            serviceList.addAll(originalServiceList);
+            applySorting(serviceList);
+        }
+        if (serviceAdapter != null) serviceAdapter.updateList(new ArrayList<>(serviceList));
+        updateEmptyView();
+        addMarkersToMap();
     }
 
     private void setupAIToggle() {
@@ -628,6 +785,7 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
         etCountry.setAdapter(countryAdapter);
 
         String[] sortOptions = {
+                "Recommended (Sponsored first)",
                 "Rating (High-Low)",
                 "Rating (Low-High)",
                 "Price (Low-High)",
@@ -830,36 +988,11 @@ public class HomeActivity extends BaseActivity implements OnMapReadyCallback {
             return;
         }
 
-        List<Service> base = serviceList.isEmpty()
-                ? originalServiceList
-                : new ArrayList<>(serviceList);
-
-        List<Service> filtered = new ArrayList<>();
-
-        if (query == null || query.trim().isEmpty()) {
-            filtered.addAll(base);
-        } else {
-            String normalizedQuery = query.trim().toLowerCase();
-
-            for (Service service : base) {
-                if (service == null) {
-                    continue;
-                }
-
-                String name = service.getName() != null
-                        ? service.getName().toLowerCase()
-                        : "";
-
-                String profession = service.getProfession() != null
-                        ? service.getProfession().toLowerCase()
-                        : "";
-
-                if (name.contains(normalizedQuery)
-                        || profession.contains(normalizedQuery)) {
-                    filtered.add(service);
-                }
-            }
+        List<Service> source;
+        synchronized (originalServiceList) {
+            source = new ArrayList<>(originalServiceList);
         }
+        List<Service> filtered = ServiceSearchFilter.filter(source, query);
 
         applySorting(filtered);
         serviceAdapter.updateList(filtered);

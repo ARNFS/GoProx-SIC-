@@ -24,17 +24,21 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.functions.FirebaseFunctions;
+import com.google.firebase.functions.FirebaseFunctionsException;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ServiceDetailActivity extends BaseActivity {
 
     private ImageView ivProfile;
     private TextView tvName, tvProfession, tvDescription, tvPrice;
     private TextView tvRatingText, tvRatingCount;
+    private TextView tvReviewEligibility;
 
     private RatingBar ratingBar, ratingBarUser;
 
@@ -58,6 +62,13 @@ public class ServiceDetailActivity extends BaseActivity {
 
     private boolean hasAlreadyReviewed = false;
     private boolean requestSubmitting = false;
+    private boolean reviewEligibilityKnown = false;
+    private boolean reviewAlreadyChecked = false;
+    private boolean reviewHasCompletedRequest = false;
+    private boolean reviewCheckFailed = false;
+    private boolean reviewSubmitting = false;
+    private String eligibleRequestId;
+    private boolean serviceRatingVerified;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,6 +104,7 @@ public class ServiceDetailActivity extends BaseActivity {
         setupRequestButton();
         setupReviewButton();
         checkIfAlreadyReviewed();
+        checkReviewEligibility();
         loadReviews();
     }
 
@@ -111,6 +123,7 @@ public class ServiceDetailActivity extends BaseActivity {
 
         tvRatingText = findViewById(R.id.tvDetailRatingText);
         tvRatingCount = findViewById(R.id.tvRatingCount);
+        tvReviewEligibility = findViewById(R.id.tvReviewEligibility);
 
         ratingBar = findViewById(R.id.ratingBarDetail);
         ratingBarUser = findViewById(R.id.ratingBarUser);
@@ -209,6 +222,7 @@ public class ServiceDetailActivity extends BaseActivity {
 
         int ratingCount =
                 intent.getIntExtra("ratingCount", 0);
+        serviceRatingVerified = intent.getBooleanExtra("ratingVerified", false);
 
         String imageUrl =
                 intent.getStringExtra("imageUrl");
@@ -303,26 +317,7 @@ public class ServiceDetailActivity extends BaseActivity {
             tvPrice.setText(displayedPrice);
         }
 
-        if (ratingBar != null) {
-            ratingBar.setRating(rating);
-        }
-
-        if (tvRatingText != null) {
-
-            tvRatingText.setText(
-                    String.format(
-                            "%.1f",
-                            rating
-                    )
-            );
-        }
-
-        if (tvRatingCount != null) {
-
-            tvRatingCount.setText(
-                    "(" + ratingCount + " reviews)"
-            );
-        }
+        renderRating(rating, ratingCount, serviceRatingVerified);
 
         // -----------------------------------------------------
         // FALLBACK: LOAD USER ID FROM FIRESTORE
@@ -709,6 +704,8 @@ public class ServiceDetailActivity extends BaseActivity {
                                 dialog.dismiss();
                             }
 
+                            GoProxAnalytics.logServiceRequestSubmitted(this);
+
                             if (btnRequestService != null) {
 
                                 btnRequestService.setEnabled(
@@ -864,40 +861,96 @@ public class ServiceDetailActivity extends BaseActivity {
                 .get()
                 .addOnSuccessListener(
                         snapshots -> {
-
-                            if (!snapshots.isEmpty()) {
-
-                                hasAlreadyReviewed = true;
-
-                                if (btnSubmitReview != null) {
-
-                                    btnSubmitReview
-                                            .setEnabled(false);
-
-                                    btnSubmitReview
-                                            .setText(
-                                                    "Already Reviewed"
-                                            );
-                                }
-
-                                if (ratingBarUser != null) {
-                                    ratingBarUser
-                                            .setIsIndicator(true);
-                                }
-
-                                if (etReview != null) {
-
-                                    etReview.setEnabled(
-                                            false
-                                    );
-
-                                    etReview.setHint(
-                                            "You have already reviewed"
-                                    );
-                                }
-                            }
+                            hasAlreadyReviewed = !snapshots.isEmpty();
+                            reviewAlreadyChecked = true;
+                            applyReviewAccessState();
                         }
-                );
+                )
+                .addOnFailureListener(error -> {
+                    reviewAlreadyChecked = false;
+                    reviewCheckFailed = true;
+                    applyReviewAccessState();
+                });
+    }
+
+    private void checkReviewEligibility() {
+        if (serviceId == null || currentUserId == null) return;
+
+        reviewEligibilityKnown = false;
+        applyReviewAccessState();
+        db.collection("serviceRequests")
+                .whereEqualTo("customerId", currentUserId)
+                .whereEqualTo("serviceId", serviceId)
+                .whereEqualTo("status", ServiceRequest.STATUS_COMPLETED)
+                .limit(1)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    reviewHasCompletedRequest = !snapshot.isEmpty();
+                    eligibleRequestId = reviewHasCompletedRequest
+                            ? snapshot.getDocuments().get(0).getId()
+                            : null;
+                    reviewEligibilityKnown = true;
+                    applyReviewAccessState();
+                })
+                .addOnFailureListener(error -> {
+                    reviewEligibilityKnown = false;
+                    reviewCheckFailed = true;
+                    applyReviewAccessState();
+                });
+    }
+
+    private void applyReviewAccessState() {
+        if (reviewCheckFailed) {
+            if (tvReviewEligibility != null) {
+                tvReviewEligibility.setText("Couldn't check review eligibility. Try again.");
+            }
+            if (btnSubmitReview != null) {
+                btnSubmitReview.setText("Retry review check");
+                btnSubmitReview.setEnabled(true);
+            }
+            if (ratingBarUser != null) ratingBarUser.setEnabled(false);
+            if (etReview != null) etReview.setEnabled(false);
+            return;
+        }
+
+        if (!reviewEligibilityKnown || !reviewAlreadyChecked) {
+            if (tvReviewEligibility != null) {
+                tvReviewEligibility.setText("Checking completed requests…");
+            }
+            if (btnSubmitReview != null) {
+                btnSubmitReview.setText("Checking eligibility…");
+                btnSubmitReview.setEnabled(false);
+            }
+            if (ratingBarUser != null) ratingBarUser.setEnabled(false);
+            if (etReview != null) etReview.setEnabled(false);
+            return;
+        }
+
+        if (hasAlreadyReviewed) {
+            if (tvReviewEligibility != null) {
+                tvReviewEligibility.setText("You've already reviewed this provider.");
+            }
+            if (btnSubmitReview != null) {
+                btnSubmitReview.setText("Already reviewed");
+                btnSubmitReview.setEnabled(false);
+            }
+            if (ratingBarUser != null) ratingBarUser.setEnabled(false);
+            if (etReview != null) etReview.setEnabled(false);
+            return;
+        }
+
+        boolean eligible = reviewHasCompletedRequest;
+        if (tvReviewEligibility != null) {
+            tvReviewEligibility.setText(eligible
+                    ? "Your completed request makes you eligible to review."
+                    : "Only customers with a completed GoProx request can leave a review.");
+        }
+        if (btnSubmitReview != null) {
+            btnSubmitReview.setText(eligible ? "Submit review" : "Review after completion");
+            btnSubmitReview.setEnabled(eligible && !reviewSubmitting);
+        }
+        if (ratingBarUser != null) ratingBarUser.setEnabled(eligible);
+        if (etReview != null) etReview.setEnabled(eligible);
     }
 
     private void setupReviewButton() {
@@ -909,11 +962,20 @@ public class ServiceDetailActivity extends BaseActivity {
         btnSubmitReview.setOnClickListener(
                 v -> {
 
-                    if (hasAlreadyReviewed) {
+                    if (reviewCheckFailed) {
+                        reviewCheckFailed = false;
+                        reviewAlreadyChecked = false;
+                        checkIfAlreadyReviewed();
+                        checkReviewEligibility();
+                        return;
+                    }
+
+                    if (!reviewEligibilityKnown || !reviewAlreadyChecked ||
+                            !reviewHasCompletedRequest || hasAlreadyReviewed || reviewSubmitting) {
 
                         Toast.makeText(
                                 this,
-                                "You have already reviewed this service",
+                                "A completed GoProx request is required to review this provider.",
                                 Toast.LENGTH_SHORT
                         ).show();
 
@@ -944,105 +1006,44 @@ public class ServiceDetailActivity extends BaseActivity {
                         return;
                     }
 
-                    String userName =
-                            FirebaseAuth
-                                    .getInstance()
-                                    .getCurrentUser() != null
-                                    ? FirebaseAuth
-                                      .getInstance()
-                                      .getCurrentUser()
-                                      .getDisplayName()
-                                    : null;
-
-                    if (userName == null) {
-                        userName = "User";
+                    if (eligibleRequestId == null || eligibleRequestId.trim().isEmpty()) {
+                        Toast.makeText(this,
+                                "Couldn't find your completed request. Refresh and try again.",
+                                Toast.LENGTH_LONG).show();
+                        return;
                     }
 
-                    Map<String, Object> review =
-                            new HashMap<>();
-
-                    review.put(
-                            "userId",
-                            currentUserId
-                    );
-
-                    review.put(
-                            "userName",
-                            userName
-                    );
-
-                    review.put(
-                            "rating",
-                            userRating
-                    );
-
-                    review.put(
-                            "comment",
-                            text
-                    );
-
-                    review.put(
-                            "timestamp",
-                            System.currentTimeMillis()
-                    );
-
-                    btnSubmitReview.setEnabled(false);
-
-                    btnSubmitReview.setText(
-                            "Submitting..."
-                    );
-
-                    db.collection("services")
-                            .document(serviceId)
-                            .collection("reviews")
-                            .add(review)
-                            .addOnSuccessListener(
-                                    doc -> {
-
-                                        hasAlreadyReviewed = true;
-
-                                        Toast.makeText(
-                                                this,
-                                                "Review added",
-                                                Toast.LENGTH_SHORT
-                                        ).show();
-
-                                        if (etReview != null) {
-                                            etReview.setText("");
-                                        }
-
-                                        if (ratingBarUser != null) {
-                                            ratingBarUser
-                                                    .setRating(0);
-                                        }
-
-                                        btnSubmitReview
-                                                .setText(
-                                                        "Already Reviewed"
-                                                );
-
-                                        updateServiceRating();
-                                        loadReviews();
-                                    }
-                            )
-                            .addOnFailureListener(
-                                    e -> {
-
-                                        btnSubmitReview
-                                                .setEnabled(true);
-
-                                        btnSubmitReview
-                                                .setText(
-                                                        "Submit Review"
-                                                );
-
-                                        Toast.makeText(
-                                                this,
-                                                "Failed to add review",
-                                                Toast.LENGTH_SHORT
-                                        ).show();
-                                    }
-                            );
+                    reviewSubmitting = true;
+                    applyReviewAccessState();
+                    Map<String, Object> payload = new java.util.HashMap<>();
+                    payload.put("serviceId", serviceId);
+                    payload.put("requestId", eligibleRequestId);
+                    payload.put("rating", userRating);
+                    payload.put("comment", text);
+                    FirebaseFunctions.getInstance("europe-west1")
+                            .getHttpsCallable("submitServiceReview")
+                            .call(payload)
+                            .addOnSuccessListener(result -> {
+                                reviewSubmitting = false;
+                                hasAlreadyReviewed = true;
+                                if (etReview != null) etReview.setText("");
+                                if (ratingBarUser != null) ratingBarUser.setRating(0);
+                                applyReviewAccessState();
+                                Toast.makeText(this, "Review added", Toast.LENGTH_SHORT).show();
+                                loadReviews();
+                                loadServiceRating();
+                            })
+                            .addOnFailureListener(error -> {
+                                reviewSubmitting = false;
+                                applyReviewAccessState();
+                                String message = error instanceof FirebaseFunctionsException
+                                        ? error.getMessage() : null;
+                                Toast.makeText(this,
+                                        message == null || message.trim().isEmpty()
+                                                ? "Couldn't submit review. Try again."
+                                                : message,
+                                        Toast.LENGTH_LONG).show();
+                            });
                 }
         );
     }
@@ -1067,8 +1068,14 @@ public class ServiceDetailActivity extends BaseActivity {
 
                             List<Review> reviews =
                                     new ArrayList<>();
+                            Set<String> seenReviewers = new HashSet<>();
 
                             for (var doc : snapshots) {
+
+                                String reviewerId = doc.getString("userId");
+                                if (reviewerId != null && !seenReviewers.add(reviewerId)) {
+                                    continue;
+                                }
 
                                 String userName =
                                         doc.getString(
@@ -1131,7 +1138,7 @@ public class ServiceDetailActivity extends BaseActivity {
                 );
     }
 
-    private void updateServiceRating() {
+    private void loadServiceRating() {
 
         if (serviceId == null) {
             return;
@@ -1139,74 +1146,34 @@ public class ServiceDetailActivity extends BaseActivity {
 
         db.collection("services")
                 .document(serviceId)
-                .collection("reviews")
                 .get()
-                .addOnSuccessListener(
-                        docs -> {
+                .addOnSuccessListener(document -> {
+                    Double average = document.getDouble("rating");
+                    Long count = document.getLong("ratingCount");
+                    float rating = average == null ? 0f : average.floatValue();
+                    int reviews = count == null ? 0 : count.intValue();
+                    serviceRatingVerified = Boolean.TRUE.equals(document.getBoolean("ratingVerified"));
+                    renderRating(rating, reviews, serviceRatingVerified);
+                });
+    }
 
-                            float total = 0;
-                            int count = docs.size();
-
-                            for (var doc : docs) {
-
-                                Double r =
-                                        doc.getDouble(
-                                                "rating"
-                                        );
-
-                                if (r != null) {
-                                    total += r;
-                                }
-                            }
-
-                            float newAvg =
-                                    count > 0
-                                            ? total / count
-                                            : 0;
-
-                            Map<String, Object> updates =
-                                    new HashMap<>();
-
-                            updates.put(
-                                    "rating",
-                                    newAvg
-                            );
-
-                            updates.put(
-                                    "ratingCount",
-                                    count
-                            );
-
-                            db.collection("services")
-                                    .document(serviceId)
-                                    .update(updates);
-
-                            if (ratingBar != null) {
-                                ratingBar.setRating(
-                                        newAvg
-                                );
-                            }
-
-                            if (tvRatingText != null) {
-
-                                tvRatingText.setText(
-                                        String.format(
-                                                "%.1f",
-                                                newAvg
-                                        )
-                                );
-                            }
-
-                            if (tvRatingCount != null) {
-
-                                tvRatingCount.setText(
-                                        "("
-                                                + count
-                                                + " reviews)"
-                                );
-                            }
-                        }
-                );
+    private void renderRating(float rating, int count, boolean verified) {
+        boolean hasReviews = verified && count > 0;
+        if (ratingBar != null) {
+            ratingBar.setVisibility(hasReviews ? View.VISIBLE : View.GONE);
+            ratingBar.setRating(hasReviews ? rating : 0f);
+        }
+        if (tvRatingText != null) {
+            tvRatingText.setText(!verified
+                    ? "Older rating not verified"
+                    : hasReviews
+                    ? String.format(java.util.Locale.getDefault(), "%.1f", rating)
+                    : "No reviews yet");
+        }
+        if (tvRatingCount != null) {
+            tvRatingCount.setVisibility(hasReviews ? View.VISIBLE : View.GONE);
+            tvRatingCount.setText("(" + count + " reviews)");
+        }
     }
 
     // =========================================================

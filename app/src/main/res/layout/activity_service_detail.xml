@@ -170,6 +170,16 @@
                 android:textColor="@color/black"
                 android:layout_marginBottom="12dp" />
 
+            <TextView
+                android:id="@+id/tvReviewEligibility"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Checking completed requests…"
+                android:textColor="@color/dark_gray"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp"
+                android:accessibilityLiveRegion="polite" />
+
             <RatingBar
                 android:id="@+id/ratingBarUser"
                 android:layout_width="wrap_content"
@@ -186,6 +196,7 @@
                 android:inputType="textMultiLine"
                 android:minLines="2"
                 android:maxLines="4"
+                android:maxLength="1000"
                 android:layout_marginTop="8dp"
                 android:padding="12dp"
                 android:background="@drawable/bg_message_input" />

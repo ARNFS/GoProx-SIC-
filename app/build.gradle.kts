@@ -20,6 +20,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val agoraAppId = getLocalProperty("AGORA_APP_ID")
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] =
+            getLocalProperty("GOOGLE_MAPS_API_KEY")
 
         buildConfigField(
             "String",
@@ -159,6 +161,9 @@ dependencies {
         "com.google.firebase:firebase-functions"
     )
 
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
+    releaseImplementation("com.google.firebase:firebase-appcheck-playintegrity")
+
     implementation(
         "com.google.firebase:firebase-messaging:25.0.2"
     )
@@ -173,6 +178,11 @@ dependencies {
 
     implementation(
         "com.google.android.gms:play-services-auth:21.5.1"
+    )
+
+    // Google Play subscriptions for provider promotion plans.
+    implementation(
+        "com.android.billingclient:billing:9.1.0"
     )
 
     // =========================================================

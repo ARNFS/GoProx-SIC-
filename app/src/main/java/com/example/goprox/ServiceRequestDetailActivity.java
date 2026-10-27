@@ -16,14 +16,16 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 
 public class ServiceRequestDetailActivity extends BaseActivity {
+    private static final String FIREBASE_DB_URL =
+            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
 
     private Toolbar toolbar;
 
@@ -295,65 +297,27 @@ public class ServiceRequestDetailActivity extends BaseActivity {
             return;
         }
 
-        db.collection("users")
-                .document(uid)
+        FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                .getReference("users")
+                .child(uid)
+                .child("name")
                 .get()
                 .addOnSuccessListener(snapshot -> {
-
-                    if (snapshot == null
-                            || !snapshot.exists()) {
-                        return;
-                    }
-
-                    String name = getUserDisplayName(
-                            snapshot
-                    );
-
-                    if (customer) {
-                        customerName = name;
-
-                        if (tvCustomer != null) {
-                            tvCustomer.setText(
-                                    customerName
-                            );
-                        }
-                    } else {
-                        providerName = name;
-
-                        if (tvProvider != null) {
-                            tvProvider.setText(
-                                    providerName
-                            );
-                        }
-                    }
-                });
+                    String name = snapshot.getValue(String.class);
+                    setParticipantName(customer, name);
+                })
+                .addOnFailureListener(error -> setParticipantName(customer, null));
     }
 
-    private String getUserDisplayName(
-            DocumentSnapshot snapshot
-    ) {
-
-        String name = snapshot.getString("name");
-
-        if (name == null
-                || name.trim().isEmpty()) {
-
-            name = snapshot.getString("displayName");
+    private void setParticipantName(boolean customer, String name) {
+        String displayName = name == null || name.trim().isEmpty() ? "Unknown user" : name.trim();
+        if (customer) {
+            customerName = displayName;
+            if (tvCustomer != null) tvCustomer.setText(customerName);
+        } else {
+            providerName = displayName;
+            if (tvProvider != null) tvProvider.setText(providerName);
         }
-
-        if (name == null
-                || name.trim().isEmpty()) {
-
-            name = snapshot.getString("fullName");
-        }
-
-        if (name == null
-                || name.trim().isEmpty()) {
-
-            return "Unknown user";
-        }
-
-        return name.trim();
     }
 
     private void displayRequest() {

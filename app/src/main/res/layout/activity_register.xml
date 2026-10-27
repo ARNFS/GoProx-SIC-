@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white">
+    android:background="@color/background">
 
     <ScrollView
         android:layout_width="match_parent"
@@ -18,8 +18,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:padding="32dp">
+                android:gravity="center_horizontal"
+            android:paddingStart="24dp"
+            android:paddingTop="40dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="32dp">
 
             <TextView
                 android:id="@+id/tvRegisterTitle"
@@ -29,7 +32,16 @@
                 android:textSize="28sp"
                 android:textStyle="bold"
                 android:textColor="@android:color/black"
-                android:layout_marginBottom="32dp"/>
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Create an account to find or offer local services."
+                android:textColor="@color/dark_gray"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:layout_marginBottom="24dp"/>
 
             <!-- Google Button - Blue -->
             <Button
@@ -40,8 +52,27 @@
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:backgroundTint="#2196F3"
+                android:backgroundTint="@color/primary"
                 android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="OR SIGN UP WITH EMAIL"
+                android:textColor="@color/dark_gray"
+                android:textSize="12sp"
+                android:gravity="center"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Email address"
+                android:textColor="@color/on_surface"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:labelFor="@id/etEmail"
+                android:layout_marginBottom="6dp"/>
 
             <!-- Email Field -->
             <EditText
@@ -50,31 +81,71 @@
                 android:layout_height="56dp"
                 android:hint="Email"
                 android:inputType="textEmailAddress"
+                android:autofillHints="emailAddress"
+                android:singleLine="true"
+                android:imeOptions="actionNext"
                 android:padding="16dp"
                 android:textColor="@android:color/black"
-                android:textColorHint="#9E9E9E"
+                android:textColorHint="@color/dark_gray"
                 android:background="@drawable/edittext_bg"
                 android:layout_marginBottom="12dp"/>
 
-            <!-- Password Fields Container (initially hidden) -->
+            <!-- Password fields are visible with the email option; no extra reveal step. -->
             <LinearLayout
                 android:id="@+id/llPasswordFields"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone">
+                android:visibility="visible">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Password"
+                    android:textColor="@color/on_surface"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:labelFor="@id/etPassword"
+                    android:layout_marginBottom="6dp"/>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:endIconMode="password_toggle">
 
                 <EditText
                     android:id="@+id/etPassword"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
-                    android:hint="Password (min 6 characters)"
+                    android:hint="At least 6 characters"
                     android:inputType="textPassword"
+                    android:autofillHints="newPassword"
+                    android:singleLine="true"
+                    android:imeOptions="actionNext"
                     android:padding="16dp"
                     android:textColor="@android:color/black"
-                    android:textColorHint="#9E9E9E"
-                    android:background="@drawable/edittext_bg"
-                    android:layout_marginBottom="12dp"/>
+                    android:textColorHint="@color/dark_gray"
+                    android:background="@null"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Confirm password"
+                    android:textColor="@color/on_surface"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:labelFor="@id/etConfirmPassword"
+                    android:layout_marginBottom="6dp"/>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    app:endIconMode="password_toggle">
 
                 <EditText
                     android:id="@+id/etConfirmPassword"
@@ -82,11 +153,14 @@
                     android:layout_height="56dp"
                     android:hint="Confirm Password"
                     android:inputType="textPassword"
+                    android:autofillHints="newPassword"
+                    android:singleLine="true"
+                    android:imeOptions="actionGo"
                     android:padding="16dp"
                     android:textColor="@android:color/black"
-                    android:textColorHint="#9E9E9E"
-                    android:background="@drawable/edittext_bg"
-                    android:layout_marginBottom="16dp"/>
+                    android:textColorHint="@color/dark_gray"
+                    android:background="@null"/>
+                </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
             <!-- Email Button - Green -->
@@ -94,12 +168,21 @@
                 android:id="@+id/btnEmail"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:text="Register with Email"
+                android:text="Create account"
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:backgroundTint="#4CAF50"
+                android:backgroundTint="@color/green"
                 android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Verify your email to finish setting up your account."
+                android:textColor="@color/dark_gray"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:layout_marginBottom="8dp"/>
 
             <!-- Link to Login - Yellow -->
             <TextView
@@ -107,7 +190,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Already have an account? Login"
-                android:textColor="#FFC107"
+                android:textColor="@color/primary"
                 android:textSize="16sp"
                 android:padding="16dp"
                 android:onClick="goToLogin"/>

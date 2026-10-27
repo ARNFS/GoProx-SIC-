@@ -22,7 +22,6 @@ import com.google.firebase.storage.StorageReference;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -154,7 +153,7 @@ public class EditProfileActivity extends AppCompatActivity {
     }
 
     private void uploadProfilePhoto(String name) {
-        String fileName = "profile_photos/" + UUID.randomUUID().toString() + ".jpg";
+        String fileName = "profile_photos/" + currentUser.getUid() + "/profile.jpg";
         StorageReference fileRef = storage.getReference().child(fileName);
 
         fileRef.putFile(imageUri)

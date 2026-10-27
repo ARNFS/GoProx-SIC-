@@ -18,6 +18,11 @@ public class FirebaseService {
         void onCallback(List<Service> services);
     }
 
+    public interface ServiceResultCallback {
+        void onSuccess(List<Service> services);
+        void onFailure(Exception error);
+    }
+
     public interface OnDeleteListener {
         void onSuccess();
         void onFailure(String error);
@@ -31,6 +36,22 @@ public class FirebaseService {
         if (callback == null) {
             return;
         }
+
+        getAllServicesWithResult(new ServiceResultCallback() {
+            @Override
+            public void onSuccess(List<Service> services) {
+                callback.onCallback(services);
+            }
+
+            @Override
+            public void onFailure(Exception error) {
+                callback.onCallback(new ArrayList<>());
+            }
+        });
+    }
+
+    public void getAllServicesWithResult(ServiceResultCallback callback) {
+        if (callback == null) return;
 
         db.collection("services")
                 .get()
@@ -47,11 +68,9 @@ public class FirebaseService {
                         }
                     }
 
-                    callback.onCallback(services);
+                    callback.onSuccess(services);
                 })
-                .addOnFailureListener(error ->
-                        callback.onCallback(new ArrayList<>())
-                );
+                .addOnFailureListener(callback::onFailure);
     }
 
     public void getAllServicesWithTags(ServiceCallback callback) {
@@ -255,6 +274,7 @@ public class FirebaseService {
 
             Double rating = readDouble(document, "rating");
             Long ratingCountLong = readLong(document, "ratingCount");
+            Boolean ratingVerified = document.getBoolean("ratingVerified");
 
             String userId = document.getString("userId");
 
@@ -293,6 +313,7 @@ public class FirebaseService {
                     country,
                     city
             );
+            service.setRatingVerified(Boolean.TRUE.equals(ratingVerified));
 
             if (priceType != null && !priceType.trim().isEmpty()) {
                 service.setPriceType(priceType);

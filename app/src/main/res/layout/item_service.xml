@@ -34,6 +34,22 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/tvSponsored"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_sponsored_badge"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:text="Sponsored"
+                    android:textColor="@color/black"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
                     android:id="@+id/tvServiceName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -71,6 +87,16 @@
                     android:stepSize="0.5"
                     android:isIndicator="true"
                     android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:id="@+id/tvServiceRatingSummary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="No reviews yet"
+                    android:textSize="12sp"
+                    android:textColor="@color/dark_gray"
+                    android:layout_marginTop="6dp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tvServicePrice"

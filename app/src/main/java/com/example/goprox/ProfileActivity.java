@@ -18,12 +18,16 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.Timestamp;
+import com.google.firebase.functions.FirebaseFunctions;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -31,12 +35,13 @@ public class ProfileActivity extends BaseActivity {
 
     private CircleImageView ivProfileAvatar;
     private TextView tvName, tvEmail, tvMemberSince, tvNoPosts;
-    private Button btnEditProfile, btnLogout, btnMyRequests;
+    private Button btnEditProfile, btnLogout, btnMyRequests, btnProviderPlans;
     private RecyclerView rvMyPosts;
     private BottomNavigationView bottomNavigationView;
 
     private ProfilePostsAdapter postsAdapter;
     private final List<Service> myPostsList = new ArrayList<>();
+    private final Set<String> promotedServiceIds = new HashSet<>();
 
     private FirebaseAuth mAuth;
     private FirebaseUser currentUser;
@@ -76,6 +81,7 @@ public class ProfileActivity extends BaseActivity {
 
         btnEditProfile = findViewById(R.id.btnEditProfile);
         btnMyRequests = findViewById(R.id.btnMyRequests);
+        btnProviderPlans = findViewById(R.id.btnProviderPlans);
         btnLogout = findViewById(R.id.btnLogout);
 
         rvMyPosts = findViewById(R.id.rvMyPosts);
@@ -219,6 +225,16 @@ public class ProfileActivity extends BaseActivity {
                 }
             }
         });
+        postsAdapter.setOnPromotionClickListener((service, isPromoted) -> {
+            if (service == null || service.getId() == null) return;
+            if (isPromoted) {
+                removePromotion(service.getId());
+            } else {
+                Intent intent = new Intent(this, ProviderPlansActivity.class);
+                intent.putExtra("serviceId", service.getId());
+                startActivity(intent);
+            }
+        });
     }
 
     private void openEditService(Service service) {
@@ -343,6 +359,11 @@ public class ProfileActivity extends BaseActivity {
 
     private void setupButtons() {
 
+        if (btnProviderPlans != null) {
+            btnProviderPlans.setOnClickListener(v ->
+                    startActivity(new Intent(this, ProviderPlansActivity.class)));
+        }
+
         if (btnEditProfile != null) {
             btnEditProfile.setOnClickListener(
                     v -> startActivity(
@@ -370,6 +391,47 @@ public class ProfileActivity extends BaseActivity {
                     v -> showLogoutDialog()
             );
         }
+    }
+
+    private void loadActivePromotions() {
+        if (currentUser == null) return;
+        if (postsAdapter != null) postsAdapter.setPromotionStateUnknown();
+        FirebaseFirestore.getInstance().collection("servicePromotions")
+                .whereEqualTo("ownerUid", currentUser.getUid())
+                .whereGreaterThan("expiresAt", Timestamp.now())
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    promotedServiceIds.clear();
+                    for (com.google.firebase.firestore.DocumentSnapshot document : snapshot.getDocuments()) {
+                        promotedServiceIds.add(document.getId());
+                    }
+                    if (postsAdapter != null) postsAdapter.setPromotedServiceIds(promotedServiceIds);
+                })
+                .addOnFailureListener(error -> {
+                    // Keep promotion actions disabled until the current state can be verified.
+                    if (postsAdapter != null) postsAdapter.setPromotionStateUnavailable();
+                });
+    }
+
+    private void removePromotion(String serviceId) {
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("serviceId", serviceId);
+        FirebaseFunctions.getInstance("europe-west1")
+                .getHttpsCallable("removeProviderPromotion")
+                .call(payload)
+                .addOnSuccessListener(result -> {
+                    GoProxAnalytics.logPromotionRemoved(this);
+                    Toast.makeText(this, "Promotion stopped. The listing can still appear in regular search.", Toast.LENGTH_LONG).show();
+                    loadActivePromotions();
+                })
+                .addOnFailureListener(error ->
+                        Toast.makeText(this, "Couldn't stop the promotion. Try again.", Toast.LENGTH_LONG).show());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadActivePromotions();
     }
 
     private void showLogoutDialog() {

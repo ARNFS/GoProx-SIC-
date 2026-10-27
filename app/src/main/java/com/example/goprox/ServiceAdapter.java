@@ -18,12 +18,15 @@ import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHolder> {
 
     private List<Service> serviceList;
     private OnItemClickListener listener;
     private OnItemLongClickListener longClickListener;
+    private Set<String> sponsoredServiceIds = new HashSet<>();
 
     public interface OnItemClickListener {
         void onItemClick(int position);
@@ -39,6 +42,11 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
 
     public void setOnItemLongClickListener(OnItemLongClickListener longClickListener) {
         this.longClickListener = longClickListener;
+    }
+
+    public void setSponsoredServiceIds(Set<String> serviceIds) {
+        sponsoredServiceIds = serviceIds == null ? new HashSet<>() : new HashSet<>(serviceIds);
+        notifyDataSetChanged();
     }
 
     public ServiceAdapter(List<Service> serviceList) {
@@ -62,6 +70,10 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
 
         if (holder.tvName != null) {
             holder.tvName.setText(service.getName() != null ? service.getName() : "");
+        }
+        if (holder.tvSponsored != null) {
+            boolean sponsored = service.getId() != null && sponsoredServiceIds.contains(service.getId());
+            holder.tvSponsored.setVisibility(sponsored ? View.VISIBLE : View.GONE);
         }
         if (holder.tvProfession != null) {
             holder.tvProfession.setText(service.getProfession() != null ? service.getProfession() : "");
@@ -91,6 +103,13 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
         }
         if (holder.ratingBar != null) {
             holder.ratingBar.setRating(service.getRating());
+            boolean hasVerifiedRating = service.isRatingVerified() && service.getRatingCount() > 0;
+            holder.ratingBar.setVisibility(hasVerifiedRating ? View.VISIBLE : View.GONE);
+            if (holder.tvRatingSummary != null) {
+                holder.tvRatingSummary.setVisibility(hasVerifiedRating ? View.GONE : View.VISIBLE);
+                holder.tvRatingSummary.setText(service.isRatingVerified()
+                        ? "No reviews yet" : "Older rating not verified");
+            }
         }
 
         if (holder.ivProfile != null) {
@@ -168,7 +187,7 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView ivProfile, ivLocation;
-        TextView tvName, tvProfession, tvDescription, tvPrice, tvLocation;
+        TextView tvName, tvProfession, tvDescription, tvPrice, tvLocation, tvSponsored, tvRatingSummary;
         RatingBar ratingBar;
         CardView cardView;
 
@@ -177,11 +196,13 @@ public class ServiceAdapter extends RecyclerView.Adapter<ServiceAdapter.ViewHold
             ivProfile = itemView.findViewById(R.id.ivServiceImage);
             ivLocation = itemView.findViewById(R.id.ivLocation);
             tvName = itemView.findViewById(R.id.tvServiceName);
+            tvSponsored = itemView.findViewById(R.id.tvSponsored);
             tvProfession = itemView.findViewById(R.id.tvServiceProfession);
             tvDescription = itemView.findViewById(R.id.tvServiceDescription);
             tvPrice = itemView.findViewById(R.id.tvServicePrice);
             tvLocation = itemView.findViewById(R.id.tvServiceLocation);
             ratingBar = itemView.findViewById(R.id.ratingBarService);
+            tvRatingSummary = itemView.findViewById(R.id.tvServiceRatingSummary);
             cardView = (CardView) itemView;
         }
     }

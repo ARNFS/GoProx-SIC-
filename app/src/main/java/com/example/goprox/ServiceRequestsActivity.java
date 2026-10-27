@@ -1,5 +1,5 @@
 package com.example.goprox;
-
+//aurafarming
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -18,9 +18,12 @@ import com.google.android.material.button.MaterialButton;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
+import com.google.android.gms.tasks.Tasks;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 
 public class ServiceRequestsActivity extends BaseActivity {
+    private static final String FIREBASE_DB_URL =
+            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
 
     private Toolbar toolbar;
 
@@ -391,39 +396,25 @@ public class ServiceRequestsActivity extends BaseActivity {
             return;
         }
 
-        db.collection("users")
-                .document(userId)
-                .get()
-                .addOnSuccessListener(document -> {
-
-                    if (document.exists()) {
-
-                        String name =
-                                document.getString("name");
-
-                        String photo =
-                                document.getString("photoUrl");
-
-                        userNames.put(
-                                userId,
-                                name != null
-                                        ? name
-                                        : "User"
-                        );
-
-                        userPhotos.put(
-                                userId,
-                                photo != null
-                                        ? photo
-                                        : ""
-                        );
-                    }
-
+        com.google.firebase.database.DatabaseReference profileRef =
+                FirebaseDatabase.getInstance(FIREBASE_DB_URL)
+                        .getReference("users")
+                        .child(userId);
+        Tasks.whenAllSuccess(profileRef.child("name").get(), profileRef.child("photoUrl").get())
+                .addOnSuccessListener(values -> {
+                    DataSnapshot nameSnapshot = (DataSnapshot) values.get(0);
+                    DataSnapshot photoSnapshot = (DataSnapshot) values.get(1);
+                    String name = nameSnapshot.getValue(String.class);
+                    String photo = photoSnapshot.getValue(String.class);
+                    userNames.put(userId, name == null || name.trim().isEmpty() ? "User" : name);
+                    userPhotos.put(userId, photo == null ? "" : photo);
                     onComplete.run();
                 })
-                .addOnFailureListener(e ->
-                        onComplete.run()
-                );
+                .addOnFailureListener(error -> {
+                    userNames.put(userId, "User");
+                    userPhotos.put(userId, "");
+                    onComplete.run();
+                });
     }
 
     private String getOtherUserId(

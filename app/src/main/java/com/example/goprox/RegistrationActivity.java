@@ -1,6 +1,5 @@
 package com.example.goprox;
 
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -9,8 +8,11 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -18,33 +20,22 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.firestore.FirebaseFirestore;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class RegistrationActivity extends AppCompatActivity {
-
     private Button btnGoogle, btnEmail;
     private EditText etEmail, etPassword, etConfirmPassword;
     private LinearLayout llPasswordFields;
     private ProgressBar pbLoading;
+    private TextView tvGoToLogin;
 
-    private FirebaseAuth mAuth;
+    private FirebaseAuth auth;
     private GoogleSignInClient googleSignInClient;
-    private static final int RC_SIGN_IN = 1001;
-
-    // Realtime Database URL
-    private static final String FIREBASE_DB_URL =
-            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
+    private ActivityResultLauncher<Intent> googleLauncher;
+    private boolean busy;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,512 +49,209 @@ public class RegistrationActivity extends AppCompatActivity {
         etConfirmPassword = findViewById(R.id.etConfirmPassword);
         llPasswordFields = findViewById(R.id.llPasswordFields);
         pbLoading = findViewById(R.id.pbLoading);
+        tvGoToLogin = findViewById(R.id.tvGoToLogin);
 
-        if (btnGoogle == null || btnEmail == null || etEmail == null || pbLoading == null) {
-            Toast.makeText(this, "Layout error: missing views", Toast.LENGTH_SHORT).show();
+        if (btnGoogle == null || btnEmail == null || etEmail == null
+                || etPassword == null || etConfirmPassword == null
+                || llPasswordFields == null || pbLoading == null) {
+            Toast.makeText(this, "Couldn't load the registration screen.", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        mAuth = FirebaseAuth.getInstance();
+        auth = FirebaseAuth.getInstance();
+        googleLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result -> {
+                    if (result.getResultCode() != RESULT_OK || result.getData() == null) {
+                        setBusy(false);
+                        return; // User cancelled Google sign-in.
+                    }
+                    try {
+                        GoogleSignInAccount account = GoogleSignIn
+                                .getSignedInAccountFromIntent(result.getData())
+                                .getResult(ApiException.class);
+                        if (account == null || account.getIdToken() == null) {
+                            setBusy(false);
+                            showMessage("Google couldn't verify this sign-in. Try again.");
+                            return;
+                        }
+                        AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
+                        auth.signInWithCredential(credential).addOnCompleteListener(this, task -> {
+                            if (!task.isSuccessful()) {
+                                setBusy(false);
+                                showMessage(AuthErrorMessages.signIn(task.getException()));
+                                return;
+                            }
+                            saveProfileAndContinue(auth.getCurrentUser());
+                        });
+                    } catch (ApiException error) {
+                        setBusy(false);
+                        showMessage("Google sign-in was cancelled or couldn't be completed.");
+                    }
+                });
 
         try {
-            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(
-                    GoogleSignInOptions.DEFAULT_SIGN_IN)
+            GoogleSignInOptions options = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                     .requestIdToken(getString(R.string.default_web_client_id))
                     .requestEmail()
                     .build();
-
-            googleSignInClient = GoogleSignIn.getClient(this, gso);
-
-        } catch (Exception e) {
-            Toast.makeText(this, "Google Sign-In init failed", Toast.LENGTH_SHORT).show();
+            googleSignInClient = GoogleSignIn.getClient(this, options);
+        } catch (RuntimeException error) {
             googleSignInClient = null;
         }
 
         btnGoogle.setOnClickListener(v -> startGoogleSignIn());
-
         btnEmail.setOnClickListener(v -> {
-            if (llPasswordFields != null
-                    && llPasswordFields.getVisibility() == View.GONE) {
-
-                llPasswordFields.setVisibility(View.VISIBLE);
-                btnEmail.setText("Register");
-                etEmail.requestFocus();
-
-            } else {
+            hideKeyboard();
+            registerWithEmail();
+        });
+        etConfirmPassword.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_GO
+                    || actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
                 hideKeyboard();
                 registerWithEmail();
+                return true;
+            }
+            return false;
+        });
+        if (tvGoToLogin != null) tvGoToLogin.setOnClickListener(v -> goToLogin());
+    }
+
+    private void registerWithEmail() {
+        if (busy) return;
+        etEmail.setError(null);
+        etPassword.setError(null);
+        etConfirmPassword.setError(null);
+
+        String email = AuthInputValidator.normalizeEmail(etEmail.getText().toString());
+        String password = etPassword.getText().toString();
+        String confirmation = etConfirmPassword.getText().toString();
+
+        if (!AuthInputValidator.isValidEmail(email)) {
+            etEmail.setError("Enter a valid email address.");
+            etEmail.requestFocus();
+            return;
+        }
+        if (!AuthInputValidator.isValidPassword(password)) {
+            etPassword.setError("Use at least 6 characters.");
+            etPassword.requestFocus();
+            return;
+        }
+        if (!AuthInputValidator.passwordsMatch(password, confirmation)) {
+            etConfirmPassword.setError("Passwords don't match.");
+            etConfirmPassword.requestFocus();
+            return;
+        }
+
+        setBusy(true);
+        auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener(this, task -> {
+            if (!task.isSuccessful()) {
+                setBusy(false);
+                showMessage(AuthErrorMessages.registration(task.getException()));
+                return;
+            }
+            FirebaseUser user = auth.getCurrentUser();
+            if (user == null) {
+                setBusy(false);
+                showMessage("Account was created, but couldn't be loaded. Sign in to continue.");
+                auth.signOut();
+                return;
+            }
+
+            AuthProfileSync.ensureProfile(user).addOnCompleteListener(this, profileTask -> {
+                if (!profileTask.isSuccessful()) {
+                    auth.signOut();
+                    setBusy(false);
+                    showMessage("Account created, but profile setup failed. Sign in again to retry it.");
+                    return;
+                }
+                sendVerificationEmail(user);
+            });
+        });
+    }
+
+    private void saveProfileAndContinue(FirebaseUser user) {
+        if (user == null) {
+            setBusy(false);
+            showMessage("Account couldn't be loaded. Try again.");
+            return;
+        }
+        AuthProfileSync.ensureProfile(user).addOnCompleteListener(this, task -> {
+            if (!task.isSuccessful()) {
+                auth.signOut();
+                setBusy(false);
+                showMessage("Couldn't finish sign-in because profile setup failed. Check your connection and retry.");
+                return;
+            }
+            if (!user.isEmailVerified()) {
+                startActivity(new Intent(this, VerifyEmailActivity.class));
+                finish();
+            } else {
+                goHome();
             }
         });
     }
 
-    private void hideKeyboard() {
-        try {
-            View v = getCurrentFocus();
-
-            if (v != null) {
-                InputMethodManager imm =
-                        (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-
-                if (imm != null) {
-                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-                }
+    private void sendVerificationEmail(FirebaseUser user) {
+        user.sendEmailVerification().addOnCompleteListener(this, task -> {
+            if (!task.isSuccessful()) {
+                setBusy(false);
+                showMessage("Account created. Couldn't send the verification email; sign in to resend it.");
+                auth.signOut();
+                return;
             }
-
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void registerWithEmail() {
-        String email = etEmail.getText().toString().trim();
-
-        String password = etPassword != null
-                ? etPassword.getText().toString().trim()
-                : "";
-
-        String confirmPassword = etConfirmPassword != null
-                ? etConfirmPassword.getText().toString().trim()
-                : "";
-
-        if (email.isEmpty()) {
-            Toast.makeText(this, "Enter email", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (password.isEmpty()) {
-            Toast.makeText(this, "Enter password", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (password.length() < 6) {
-            Toast.makeText(
-                    this,
-                    "Password must be at least 6 characters",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        if (!password.equals(confirmPassword)) {
-            Toast.makeText(
-                    this,
-                    "Passwords do not match",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        pbLoading.setVisibility(View.VISIBLE);
-
-        mAuth.fetchSignInMethodsForEmail(email)
-                .addOnCompleteListener(task -> {
-
-                    if (!task.isSuccessful()) {
-                        pbLoading.setVisibility(View.GONE);
-
-                        String error = "Error checking email";
-
-                        if (task.getException() != null
-                                && task.getException().getMessage() != null) {
-                            error = task.getException().getMessage();
-                        }
-
-                        Toast.makeText(this, error, Toast.LENGTH_LONG).show();
-                        return;
-                    }
-
-                    List<String> methods =
-                            task.getResult() != null
-                                    ? task.getResult().getSignInMethods()
-                                    : null;
-
-                    if (methods != null && !methods.isEmpty()) {
-                        pbLoading.setVisibility(View.GONE);
-
-                        if (methods.contains("google.com")) {
-                            Toast.makeText(
-                                    this,
-                                    "This email is registered with Google. Please sign in with Google.",
-                                    Toast.LENGTH_LONG
-                            ).show();
-                        } else {
-                            Toast.makeText(
-                                    this,
-                                    "This email is already registered",
-                                    Toast.LENGTH_LONG
-                            ).show();
-                        }
-
-                        return;
-                    }
-
-                    mAuth.createUserWithEmailAndPassword(email, password)
-                            .addOnCompleteListener(createTask -> {
-
-                                if (!createTask.isSuccessful()) {
-                                    pbLoading.setVisibility(View.GONE);
-
-                                    String error = "Registration failed";
-
-                                    if (createTask.getException() != null
-                                            && createTask.getException().getMessage() != null) {
-                                        error = createTask.getException().getMessage();
-                                    }
-
-                                    Toast.makeText(
-                                            this,
-                                            error,
-                                            Toast.LENGTH_LONG
-                                    ).show();
-
-                                    return;
-                                }
-
-                                // User-ը ստեղծվեց Auth-ում։
-                                // Հիմա պարտադիր ստեղծում ենք profile-ը
-                                // Firestore + Realtime Database-ում։
-                                saveUserToDatabases(
-                                        email,
-                                        this::sendVerificationEmail
-                                );
-                            });
-                });
-    }
-
-    private void saveUserToDatabases(String email, Runnable onSuccess) {
-
-        FirebaseUser user = mAuth.getCurrentUser();
-
-        if (user == null) {
-            pbLoading.setVisibility(View.GONE);
-
-            android.util.Log.e(
-                    "REG_DB",
-                    "❌ Current user is null"
-            );
-
-            Toast.makeText(
-                    this,
-                    "User initialization failed",
-                    Toast.LENGTH_LONG
-            ).show();
-
-            return;
-        }
-
-        String name =
-                email != null && email.contains("@")
-                        ? email.split("@")[0]
-                        : "User";
-
-        String uid = user.getUid();
-
-        android.util.Log.d(
-                "REG_DB",
-                "✅ Saving user. uid=" + uid + ", name=" + name
-        );
-
-        Map<String, Object> userData = new HashMap<>();
-        userData.put("name", name);
-        userData.put("email", email);
-        userData.put("uid", uid);
-
-        /*
-         * ============================
-         * 1. Firestore
-         * ============================
-         *
-         * /users/{uid}
-         */
-        Task<Void> firestoreTask =
-                FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(uid)
-                        .set(userData);
-
-        /*
-         * ============================
-         * 2. Realtime Database
-         * ============================
-         *
-         * /users/{uid}
-         */
-        Task<Void> realtimeDatabaseTask =
-                FirebaseDatabase.getInstance(FIREBASE_DB_URL)
-                        .getReference("users")
-                        .child(uid)
-                        .setValue(userData);
-
-        /*
-         * Երկուսն էլ պետք է հաջող ավարտվեն։
-         */
-        Tasks.whenAll(firestoreTask, realtimeDatabaseTask)
-                .addOnCompleteListener(task -> {
-
-                    pbLoading.setVisibility(View.GONE);
-
-                    if (task.isSuccessful()) {
-
-                        android.util.Log.d(
-                                "REG_DB",
-                                "✅ SUCCESS — user saved to Firestore + Realtime Database"
-                        );
-
-                        if (onSuccess != null) {
-                            onSuccess.run();
-                        }
-
-                    } else {
-
-                        String error =
-                                "Failed to save user profile";
-
-                        if (task.getException() != null
-                                && task.getException().getMessage() != null) {
-                            error = task.getException().getMessage();
-                        }
-
-                        android.util.Log.e(
-                                "REG_DB",
-                                "❌ FAILED — " + error
-                        );
-
-                        Toast.makeText(
-                                this,
-                                "Profile setup failed: " + error,
-                                Toast.LENGTH_LONG
-                        ).show();
-                    }
-                });
-    }
-
-    private void sendVerificationEmail() {
-
-        FirebaseUser user = mAuth.getCurrentUser();
-
-        if (user == null) {
-            Toast.makeText(
-                    this,
-                    "User initialization failed",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        pbLoading.setVisibility(View.VISIBLE);
-
-        user.sendEmailVerification()
-                .addOnCompleteListener(task -> {
-
-                    pbLoading.setVisibility(View.GONE);
-
-                    if (task.isSuccessful()) {
-
-                        Toast.makeText(
-                                this,
-                                "Verification email sent",
-                                Toast.LENGTH_LONG
-                        ).show();
-
-                        startActivity(
-                                new Intent(
-                                        this,
-                                        VerifyEmailActivity.class
-                                )
-                        );
-
-                        finish();
-
-                    } else {
-
-                        String error =
-                                "Failed to send verification email";
-
-                        if (task.getException() != null
-                                && task.getException().getMessage() != null) {
-                            error = task.getException().getMessage();
-                        }
-
-                        Toast.makeText(
-                                this,
-                                error,
-                                Toast.LENGTH_LONG
-                        ).show();
-                    }
-                });
+            setBusy(false);
+            startActivity(new Intent(this, VerifyEmailActivity.class));
+            finish();
+        });
     }
 
     private void startGoogleSignIn() {
-
+        if (busy) return;
         if (googleSignInClient == null) {
-            Toast.makeText(
-                    this,
-                    "Google Sign-In unavailable",
-                    Toast.LENGTH_SHORT
-            ).show();
+            showMessage("Google sign-in isn't available right now.");
             return;
         }
-
-        pbLoading.setVisibility(View.VISIBLE);
-
+        setBusy(true);
         try {
-
-            Intent signInIntent =
-                    googleSignInClient.getSignInIntent();
-
-            startActivityForResult(
-                    signInIntent,
-                    RC_SIGN_IN
-            );
-
-        } catch (Exception e) {
-
-            pbLoading.setVisibility(View.GONE);
-
-            Toast.makeText(
-                    this,
-                    "Google Sign-In error",
-                    Toast.LENGTH_SHORT
-            ).show();
+            googleLauncher.launch(googleSignInClient.getSignInIntent());
+        } catch (RuntimeException error) {
+            setBusy(false);
+            showMessage("Google sign-in couldn't start. Please try again.");
         }
     }
 
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
+    private void setBusy(boolean value) {
+        busy = value;
+        if (pbLoading != null) pbLoading.setVisibility(value ? View.VISIBLE : View.GONE);
+        if (btnGoogle != null) btnGoogle.setEnabled(!value);
+        if (btnEmail != null) btnEmail.setEnabled(!value);
+        if (tvGoToLogin != null) tvGoToLogin.setEnabled(!value);
+        if (etEmail != null) etEmail.setEnabled(!value);
+        if (etPassword != null) etPassword.setEnabled(!value);
+        if (etConfirmPassword != null) etConfirmPassword.setEnabled(!value);
+    }
 
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
-        );
+    private void showMessage(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
 
-        if (requestCode != RC_SIGN_IN || data == null) {
-            return;
-        }
-
-        try {
-
-            Task<GoogleSignInAccount> task =
-                    GoogleSignIn.getSignedInAccountFromIntent(data);
-
-            GoogleSignInAccount account =
-                    task.getResult(ApiException.class);
-
-            if (account == null
-                    || account.getEmail() == null
-                    || account.getIdToken() == null) {
-
-                pbLoading.setVisibility(View.GONE);
-
-                Toast.makeText(
-                        this,
-                        "Google sign in failed",
-                        Toast.LENGTH_SHORT
-                ).show();
-
-                return;
-            }
-
-            String email = account.getEmail();
-
-            mAuth.fetchSignInMethodsForEmail(email)
-                    .addOnCompleteListener(fetchTask -> {
-
-                        if (!fetchTask.isSuccessful()
-                                || fetchTask.getResult() == null) {
-
-                            pbLoading.setVisibility(View.GONE);
-
-                            Toast.makeText(
-                                    this,
-                                    "Error checking account",
-                                    Toast.LENGTH_SHORT
-                            ).show();
-
-                            return;
-                        }
-
-                        List<String> methods =
-                                fetchTask.getResult().getSignInMethods();
-
-                        AuthCredential credential =
-                                GoogleAuthProvider.getCredential(
-                                        account.getIdToken(),
-                                        null
-                                );
-
-                        mAuth.signInWithCredential(credential)
-                                .addOnCompleteListener(signInTask -> {
-
-                                    if (!signInTask.isSuccessful()) {
-
-                                        pbLoading.setVisibility(View.GONE);
-
-                                        Toast.makeText(
-                                                this,
-                                                methods == null || methods.isEmpty()
-                                                        ? "Registration failed"
-                                                        : "Login failed",
-                                                Toast.LENGTH_SHORT
-                                        ).show();
-
-                                        return;
-                                    }
-
-                                    /*
-                                     * Google account-ի դեպքում էլ
-                                     * profile-ը ապահովում ենք
-                                     * Firestore + RTDB-ում։
-                                     */
-                                    saveUserToDatabases(
-                                            email,
-                                            this::goHome
-                                    );
-                                });
-                    });
-
-        } catch (Exception e) {
-
-            pbLoading.setVisibility(View.GONE);
-
-            Toast.makeText(
-                    this,
-                    "Google error: " + e.getMessage(),
-                    Toast.LENGTH_LONG
-            ).show();
-        }
+    public void goToLogin() {
+        startActivity(new Intent(this, LoginActivity.class));
+        finish();
     }
 
     private void goHome() {
+        Intent intent = new Intent(this, HomeActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
 
-        try {
-
-            Intent intent =
-                    new Intent(
-                            this,
-                            HomeActivity.class
-                    );
-
-            intent.setFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_CLEAR_TASK
-            );
-
-            startActivity(intent);
-            finish();
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "Navigation error",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
+    private void hideKeyboard() {
+        View view = getCurrentFocus();
+        if (view == null) return;
+        InputMethodManager manager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (manager != null) manager.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 }

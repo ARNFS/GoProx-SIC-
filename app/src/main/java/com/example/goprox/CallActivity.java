@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat;
 
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.functions.FirebaseFunctions;
 
 import io.agora.rtc2.ChannelMediaOptions;
 import io.agora.rtc2.Constants;
@@ -34,7 +35,6 @@ import io.agora.rtc2.video.VideoEncoderConfiguration;
 
 public class CallActivity extends AppCompatActivity {
 
-    private static final String APP_ID = "7284362f08214193a948fa9ea9a54c90";
     private static final int PERM_REQ = 22;
 
     private static final String[] PERMISSIONS = {
@@ -54,6 +54,7 @@ public class CallActivity extends AppCompatActivity {
 
     private volatile boolean isFinishing = false;
     private boolean callConnected = false;
+    private boolean tokenRequestInProgress = false;
 
     private int localUid;
 
@@ -163,6 +164,11 @@ public class CallActivity extends AppCompatActivity {
                         }
                     });
                 }
+
+                @Override
+                public void onTokenPrivilegeWillExpire(String token) {
+                    runOnUiThread(() -> requestAgoraToken(true));
+                }
             };
 
     @Override
@@ -212,10 +218,7 @@ public class CallActivity extends AppCompatActivity {
         db =
                 FirebaseFirestore.getInstance();
 
-        localUid =
-                Math.abs(currentUserId.hashCode())
-                        % 100000
-                        + 1;
+        localUid = Math.abs(currentUserId.hashCode() % 100000) + 1;
 
         initViews();
 
@@ -736,8 +739,7 @@ public class CallActivity extends AppCompatActivity {
             config.mContext =
                     getApplicationContext();
 
-            config.mAppId =
-                    APP_ID;
+            config.mAppId = BuildConfig.AGORA_APP_ID;
 
             config.mEventHandler =
                     eventHandler;
@@ -1007,6 +1009,81 @@ public class CallActivity extends AppCompatActivity {
             return;
         }
 
+        requestAgoraToken(false);
+    }
+
+    private void requestAgoraToken(boolean renew) {
+        if (isFinishing || rtcEngine == null || channelName == null
+                || tokenRequestInProgress) {
+            return;
+        }
+
+        tokenRequestInProgress = true;
+
+        FirebaseFunctions.getInstance("europe-west1")
+                .getHttpsCallable("getAgoraCallToken")
+                .call(java.util.Collections.singletonMap("channelName", channelName))
+                .addOnSuccessListener(result -> {
+                    tokenRequestInProgress = false;
+
+                    if (isFinishing || rtcEngine == null) return;
+
+                    Object response = result.getData();
+                    if (!(response instanceof java.util.Map)) {
+                        handleTokenFailure();
+                        return;
+                    }
+
+                    java.util.Map<?, ?> tokenData =
+                            (java.util.Map<?, ?>) response;
+                    Object tokenValue = tokenData.get("token");
+                    Object uidValue = tokenData.get("uid");
+                    Object appIdValue = tokenData.get("appId");
+
+                    if (!(tokenValue instanceof String)
+                            || !(uidValue instanceof Number)
+                            || !BuildConfig.AGORA_APP_ID.equals(appIdValue)) {
+                        handleTokenFailure();
+                        return;
+                    }
+
+                    String token = (String) tokenValue;
+                    int authorizedUid = ((Number) uidValue).intValue();
+
+                    if (renew) {
+                        if (authorizedUid != localUid
+                                || rtcEngine.renewToken(token) < 0) {
+                            handleTokenFailure();
+                        }
+                        return;
+                    }
+
+                    localUid = authorizedUid;
+                    joinChannelWithToken(token);
+                })
+                .addOnFailureListener(error -> {
+                    tokenRequestInProgress = false;
+                    handleTokenFailure();
+                });
+    }
+
+    private void handleTokenFailure() {
+        if (isFinishing) return;
+
+        Toast.makeText(
+                this,
+                "Secure call authorization failed",
+                Toast.LENGTH_SHORT
+        ).show();
+
+        cleanupAndFinish();
+    }
+
+    private void joinChannelWithToken(String token) {
+        if (isFinishing || rtcEngine == null || channelName == null) {
+            return;
+        }
+
         try {
 
             ChannelMediaOptions opts =
@@ -1031,7 +1108,7 @@ public class CallActivity extends AppCompatActivity {
                     true;
 
             rtcEngine.joinChannel(
-                    null,
+                    token,
                     channelName,
                     localUid,
                     opts

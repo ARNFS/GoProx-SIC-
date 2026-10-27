@@ -2,8 +2,10 @@ package com.example.goprox;
 
 import android.Manifest;
 import android.content.ActivityNotFoundException;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -40,6 +42,7 @@ import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.functions.FirebaseFunctions;
 import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageMetadata;
 import com.google.firebase.storage.StorageReference;
 
 import java.io.File;
@@ -49,6 +52,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +66,15 @@ public class ChatActivity extends BaseActivity {
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final int PICK_IMAGE = 100;
     private static final int PICK_FILE = 101;
+    private static final long MAX_CHAT_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
+    private static final String[] CHAT_ATTACHMENT_MIME_TYPES = {
+            "image/jpeg", "image/png", "image/webp", "image/gif",
+            "application/pdf", "text/plain", "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.ms-excel", "application/vnd.ms-powerpoint"
+    };
 
     private RecyclerView recyclerView;
     private EditText etMessage;
@@ -1561,38 +1574,25 @@ public class ChatActivity extends BaseActivity {
                             options,
                             (dialog, which) -> {
 
-                                if (which == 0) {
+                                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                                intent.setType(which == 0 ? "image/*" : "*/*");
+                                intent.putExtra(
+                                        Intent.EXTRA_MIME_TYPES,
+                                        which == 0
+                                                ? new String[]{"image/jpeg", "image/png", "image/webp", "image/gif"}
+                                                : CHAT_ATTACHMENT_MIME_TYPES
+                                );
 
-                                    Intent intent =
-                                            new Intent(
-                                                    Intent.ACTION_PICK
-                                            );
-
-                                    intent.setType(
-                                            "image/*"
-                                    );
-
+                                try {
                                     startActivityForResult(
-                                            intent,
-                                            PICK_IMAGE
+                                            Intent.createChooser(intent, "Choose attachment"),
+                                            which == 0 ? PICK_IMAGE : PICK_FILE
                                     );
-
-                                } else {
-
-                                    Intent intent =
-                                            new Intent(
-                                                    Intent.ACTION_GET_CONTENT
-                                            );
-
-                                    intent.setType(
-                                            "*/*"
-                                    );
-
-                                    startActivityForResult(
-                                            intent,
-                                            PICK_FILE
-                                    );
+                                } catch (Exception e) {
+                                    Toast.makeText(this, "No compatible file picker is available", Toast.LENGTH_SHORT).show();
                                 }
+
                             }
                     )
                     .show();
@@ -1643,6 +1643,18 @@ public class ChatActivity extends BaseActivity {
             return;
         }
 
+        ContentResolver resolver = getContentResolver();
+        String mimeType = resolver.getType(fileUri);
+        if (!isSupportedChatAttachmentMimeType(mimeType)) {
+            Toast.makeText(this, "Choose an image or a supported document type", Toast.LENGTH_LONG).show();
+            return;
+        }
+        long contentSize = getUriSize(fileUri);
+        if (contentSize > MAX_CHAT_ATTACHMENT_BYTES) {
+            Toast.makeText(this, "Attachments must be 25 MB or smaller", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         Toast.makeText(
                 this,
                 "Uploading...",
@@ -1667,8 +1679,12 @@ public class ChatActivity extends BaseActivity {
                         .child(chatId)
                         .child(fileName);
 
+        StorageMetadata metadata = new StorageMetadata.Builder()
+                .setContentType(mimeType)
+                .build();
+
         storageRef
-                .putFile(fileUri)
+                .putFile(fileUri, metadata)
                 .continueWithTask(task -> {
 
                     if (!task.isSuccessful()) {
@@ -1700,23 +1716,7 @@ public class ChatActivity extends BaseActivity {
                             displayName = "File";
                         }
 
-                        String finalType =
-                                messageType;
-
-                        if ("file".equals(
-                                messageType
-                        )) {
-
-                            String uriString =
-                                    fileUri.toString();
-
-                            finalType =
-                                    uriString.contains(
-                                            "image"
-                                    )
-                                            ? "image"
-                                            : "file";
-                        }
+                        String finalType = mimeType.startsWith("image/") ? "image" : messageType;
 
                         sendMessage(
                                 finalType,
@@ -1747,6 +1747,19 @@ public class ChatActivity extends BaseActivity {
                         ).show();
                     }
                 });
+    }
+
+    private boolean isSupportedChatAttachmentMimeType(String mimeType) {
+        return mimeType != null
+                && Arrays.asList(CHAT_ATTACHMENT_MIME_TYPES).contains(mimeType.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private long getUriSize(Uri uri) {
+        try (AssetFileDescriptor descriptor = getContentResolver().openAssetFileDescriptor(uri, "r")) {
+            return descriptor == null ? -1 : descriptor.getLength();
+        } catch (Exception ignored) {
+            return -1;
+        }
     }
 
     public void openFile(

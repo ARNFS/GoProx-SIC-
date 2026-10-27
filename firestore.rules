@@ -22,7 +22,9 @@ service cloud.firestore {
 
     match /users/{userId} {
 
-      allow read: if signedIn();
+      // Public names/photos are read from the dedicated RTDB profile children.
+      // Firestore user records may contain account email and are owner-only.
+      allow read: if isOwner(userId);
 
       allow create: if signedIn()
       && request.auth.uid == userId
@@ -109,6 +111,7 @@ service cloud.firestore {
         "priceType",
         "rating",
         "ratingCount",
+        "ratingVerified",
         "userId",
         "tags",
         "createdAt",
@@ -140,10 +143,11 @@ service cloud.firestore {
       )
       && request.resource.data.priceType is string
       && request.resource.data.rating is number
-      && request.resource.data.rating >= 0
-      && request.resource.data.rating <= 5
+      && request.resource.data.rating == 0
       && request.resource.data.ratingCount is int
-      && request.resource.data.ratingCount >= 0
+      && request.resource.data.ratingCount == 0
+      && (!request.resource.data.keys().hasAny(["ratingVerified"])
+        || request.resource.data.ratingVerified == true)
       && request.resource.data.tags is list
       && request.resource.data.createdAt is timestamp
       && request.resource.data.createdAt == request.time
@@ -165,6 +169,18 @@ service cloud.firestore {
       allow update: if signedIn()
       && resource.data.userId == request.auth.uid
       && request.resource.data.userId == resource.data.userId
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "name",
+        "profession",
+        "description",
+        "price",
+        "priceType",
+        "tags",
+        "updatedAt",
+        "imageUrl",
+        "country",
+        "city"
+      ])
       && request.resource.data.keys().hasOnly([
         "name",
         "profession",
@@ -173,6 +189,7 @@ service cloud.firestore {
         "priceType",
         "rating",
         "ratingCount",
+        "ratingVerified",
         "userId",
         "tags",
         "createdAt",
@@ -227,54 +244,25 @@ service cloud.firestore {
       match /reviews/{reviewId} {
 
         allow read: if signedIn();
-
-        allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "userId",
-          "userName",
-          "rating",
-          "comment",
-          "timestamp"
-        ])
-        && request.resource.data.keys().hasAll([
-          "userId",
-          "userName",
-          "rating",
-          "comment",
-          "timestamp"
-        ])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.userId !=
-        get(
-          /databases/$(database)/documents/services/$(serviceId)
-        ).data.userId
-        && request.resource.data.userName is string
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5
-        && request.resource.data.comment is string
-        && request.resource.data.timestamp is int;
-
-        allow update: if signedIn()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.keys().hasOnly([
-          "userId",
-          "userName",
-          "rating",
-          "comment",
-          "timestamp"
-        ])
-        && request.resource.data.userName is string
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5
-        && request.resource.data.comment is string
-        && request.resource.data.timestamp is int;
-
-        allow delete: if signedIn()
-        && resource.data.userId == request.auth.uid;
+        // Reviews and rating aggregates are written only by the verified callable.
+        allow create, update, delete: if false;
       }
+
+      match /ratingStats/{statsId} {
+        allow read, write: if false;
+      }
+
+      match /ratingEvidence/{reviewerId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Promotion metadata is public only while the paid placement is active.
+    // Purchases and entitlements remain server-only under private user data.
+    match /servicePromotions/{serviceId} {
+      allow read: if signedIn()
+        && resource.data.expiresAt is timestamp
+        && resource.data.expiresAt > request.time;
     }
 
 
