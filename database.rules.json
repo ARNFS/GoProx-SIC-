@@ -1,3 +1,4 @@
+
 {
   "rules": {
     "users": {
@@ -12,71 +13,54 @@
         }
       }
     },
-
     "chats": {
       "$chatId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
-
         "participants": {
           "$uid": {
             ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true",
             ".write": false
           }
         },
-
         "messages": {
           "$messageId": {
             ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true",
-
             ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.exists() && data.child('senderId').val() === auth.uid))",
-
             ".validate": "newData.hasChildren()",
-
             "id": {
               ".validate": "newData.isString() && newData.val() === $messageId"
             },
-
             "senderId": {
               ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && newData.val() === data.val()))"
             },
-
             "text": {
               ".validate": "newData.isString()"
             },
-
             "type": {
               ".validate": "newData.isString()"
             },
-
             "fileUrl": {
               ".validate": "newData.isString()"
             },
-
             "timestamp": {
               ".validate": "newData.isNumber()"
             },
-
             "voiceDuration": {
               ".validate": "newData.isNumber()"
             },
-
             "read": {
               ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true && newData.isBoolean() && newData.val() === true && data.val() !== true",
               ".validate": "newData.isBoolean()"
             },
-
             "uploading": {
               ".validate": "newData.isBoolean()"
             },
-
             "uploadProgress": {
               ".validate": "newData.isNumber()"
             },
-
             "fileSize": {
               ".validate": "newData.isString()"
             },
-
             "$other": {
               ".validate": false
             }
@@ -84,17 +68,14 @@
         }
       }
     },
-
     "user_chats": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-
         "$otherUserId": {
-          ".write": "auth != null && (auth.uid === $uid || auth.uid === $otherUserId)"
+          ".write": "auth != null && auth.uid === $uid"
         }
       }
     },
-
     ".read": false,
     ".write": false
   }

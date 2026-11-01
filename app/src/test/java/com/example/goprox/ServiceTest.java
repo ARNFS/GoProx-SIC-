@@ -1,4 +1,3 @@
-
 package com.example.goprox;
 
 import org.junit.Test;
@@ -16,6 +15,7 @@ public class ServiceTest {
         Service service = new Service();
 
         service.setRating(7.0f);
+        service.setRatingVerified(true);
 
         assertEquals(5.0f, service.getRating(), 0.001f);
     }
@@ -25,6 +25,16 @@ public class ServiceTest {
         Service service = new Service();
 
         service.setRating(-2.0f);
+        service.setRatingVerified(true);
+
+        assertEquals(0.0f, service.getRating(), 0.001f);
+    }
+
+    @Test
+    public void unverifiedRating_shouldNotBeExposed() {
+        Service service = new Service();
+
+        service.setRating(4.5f);
 
         assertEquals(0.0f, service.getRating(), 0.001f);
     }
@@ -34,6 +44,7 @@ public class ServiceTest {
         Service service = new Service();
 
         service.setRatingCount(-3);
+        service.setRatingVerified(true);
 
         assertEquals(0, service.getRatingCount());
     }
