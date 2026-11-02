@@ -1,3 +1,4 @@
+
 package com.example.goprox;
 
 import android.Manifest;
@@ -5,12 +6,12 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.AssetFileDescriptor;
+import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -55,7 +56,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -66,18 +69,32 @@ public class ChatActivity extends BaseActivity {
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final int PICK_IMAGE = 100;
     private static final int PICK_FILE = 101;
-    private static final long MAX_CHAT_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
+
+    private static final long MAX_CHAT_ATTACHMENT_BYTES =
+            25L * 1024L * 1024L;
+
+    private static final String FIREBASE_DB_URL =
+            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
+
     private static final String[] CHAT_ATTACHMENT_MIME_TYPES = {
-            "image/jpeg", "image/png", "image/webp", "image/gif",
-            "application/pdf", "text/plain", "application/msword",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "application/pdf",
+            "text/plain",
+            "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "application/vnd.ms-excel", "application/vnd.ms-powerpoint"
+            "application/vnd.ms-excel",
+            "application/vnd.ms-powerpoint"
     };
 
     private RecyclerView recyclerView;
+
     private EditText etMessage;
+
     private ImageButton btnSend;
     private ImageButton btnAttach;
     private ImageButton btnBack;
@@ -87,50 +104,55 @@ public class ChatActivity extends BaseActivity {
     private TextView tvUserName;
     private CircleImageView ivProfilePhoto;
 
-    private ChatAdapter adapter;
-    private final List<ChatMessage> messageList = new ArrayList<>();
-
-    private DatabaseReference chatRef;
-    private ChildEventListener msgListener;
-
-    private AudioRecorder audioRecorder;
-    private String currentAudioFile;
-    private volatile boolean isRecordingAudio = false;
-    private Handler recordingHandler;
-
     private LinearLayout llRecordingOverlay;
     private TextView tvRecordingTime;
     private View viewVisualizer;
+
+    private ChatAdapter adapter;
+
+    private final List<ChatMessage> messageList =
+            new ArrayList<>();
+
+    private DatabaseReference chatRef;
+
+    private Query messagesQuery;
+
+    private ChildEventListener msgListener;
+
+    private AudioRecorder audioRecorder;
+
+    private String currentAudioFile;
+
+    private volatile boolean isRecordingAudio = false;
+
+    private Handler recordingHandler;
+
     private long recordingStartTime;
 
     private String chatId;
     private String otherUserId;
     private String currentUserId;
 
-    private Uri fileUri;
-
-    private final String FIREBASE_DB_URL =
-            "https://myappproject-442cf-default-rtdb.europe-west1.firebasedatabase.app";
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_chat);
 
-        otherUserId = getIntent().getStringExtra("otherUserId");
+        otherUserId =
+                getIntent().getStringExtra("otherUserId");
 
         String otherUserName =
                 getIntent().getStringExtra("otherUserName");
 
-        if (otherUserId == null || otherUserId.trim().isEmpty()) {
+        if (otherUserId == null
+                || otherUserId.trim().isEmpty()) {
 
-            Toast.makeText(
-                    this,
-                    "Error: user not specified",
-                    Toast.LENGTH_SHORT
-            ).show();
+            showErrorAndFinish(
+                    "Error: user not specified"
+            );
 
-            finish();
             return;
         }
 
@@ -141,18 +163,24 @@ public class ChatActivity extends BaseActivity {
 
         if (auth.getCurrentUser() == null) {
 
-            Toast.makeText(
-                    this,
-                    "Please sign in",
-                    Toast.LENGTH_SHORT
-            ).show();
+            showErrorAndFinish(
+                    "Please sign in"
+            );
 
-            finish();
             return;
         }
 
         currentUserId =
                 auth.getCurrentUser().getUid();
+
+        if (currentUserId.equals(otherUserId)) {
+
+            showErrorAndFinish(
+                    "You cannot start a chat with yourself"
+            );
+
+            return;
+        }
 
         chatId =
                 currentUserId.compareTo(otherUserId) < 0
@@ -164,12 +192,16 @@ public class ChatActivity extends BaseActivity {
 
         messageList.clear();
 
-        initViews();
+        if (!initViews()) {
+            return;
+        }
 
         if (otherUserName != null
-                && !otherUserName.isEmpty()) {
+                && !otherUserName.trim().isEmpty()) {
 
-            tvUserName.setText(otherUserName);
+            tvUserName.setText(
+                    otherUserName.trim()
+            );
 
         } else {
 
@@ -178,323 +210,83 @@ public class ChatActivity extends BaseActivity {
 
         loadProfilePhoto();
 
-        /*
-         * Participant membership is created by the
-         * trusted Cloud Function.
-         *
-         * The client does NOT write:
-         * /chats/{chatId}/participants/{uid}
-         */
         ensureCurrentUserParticipant();
     }
 
-    // ================== CHAT PARTICIPANT ==================
+    // =========================================================
+    // GENERAL HELPERS
+    // =========================================================
 
-    private void ensureCurrentUserParticipant() {
+    private void showErrorAndFinish(String message) {
 
-        if (chatId == null
-                || chatId.isEmpty()
-                || currentUserId == null
-                || currentUserId.isEmpty()
-                || otherUserId == null
-                || otherUserId.isEmpty()) {
+        Toast.makeText(
+                this,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
 
-            Toast.makeText(
-                    this,
-                    "Unable to initialize chat",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            finish();
-            return;
-        }
-
-        Log.d(
-                TAG,
-                "Calling ensureChatParticipant. "
-                        + "chatId=" + chatId
-                        + ", currentUserId=" + currentUserId
-                        + ", otherUserId=" + otherUserId
-        );
-
-        Map<String, Object> data =
-                new HashMap<>();
-
-        data.put(
-                "otherUserId",
-                otherUserId
-        );
-
-        try {
-
-            FirebaseFunctions functions =
-                    FirebaseFunctions.getInstance(
-                            "europe-west1"
-                    );
-
-            functions
-                    .getHttpsCallable(
-                            "ensureChatParticipant"
-                    )
-                    .call(data)
-                    .addOnSuccessListener(result -> {
-
-                        Log.d(
-                                TAG,
-                                "ensureChatParticipant SUCCESS: "
-                                        + (
-                                        result != null
-                                                ? String.valueOf(
-                                                result.getData()
-                                        )
-                                                : "null"
-                                )
-                        );
-
-                        if (isFinishing()
-                                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
-                                && isDestroyed())) {
-
-                            return;
-                        }
-
-                        verifyParticipantCreated();
-
-                    })
-                    .addOnFailureListener(error -> {
-
-                        Log.e(
-                                TAG,
-                                "ensureChatParticipant FAILED",
-                                error
-                        );
-
-                        if (isFinishing()
-                                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
-                                && isDestroyed())) {
-
-                            return;
-                        }
-
-                        String message =
-                                error != null
-                                        && error.getMessage() != null
-                                        ? error.getMessage()
-                                        : "Unknown error";
-
-                        Toast.makeText(
-                                this,
-                                "Chat initialization failed: "
-                                        + message,
-                                Toast.LENGTH_LONG
-                        ).show();
-
-                        finish();
-                    });
-
-        } catch (Exception e) {
-
-            Log.e(
-                    TAG,
-                    "Exception while calling ensureChatParticipant",
-                    e
-            );
-
-            Toast.makeText(
-                    this,
-                    "Chat initialization error: "
-                            + e.getMessage(),
-                    Toast.LENGTH_LONG
-            ).show();
-
-            finish();
-        }
+        finish();
     }
 
-    private void verifyParticipantCreated() {
+    private boolean isActivityAvailable() {
 
-        if (chatId == null
-                || currentUserId == null) {
-
-            Toast.makeText(
-                    this,
-                    "Invalid chat data",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-            finish();
-            return;
-        }
-
-        DatabaseReference participantRef =
-                FirebaseDatabase
-                        .getInstance(FIREBASE_DB_URL)
-                        .getReference("chats")
-                        .child(chatId)
-                        .child("participants")
-                        .child(currentUserId);
-
-        Log.d(
-                TAG,
-                "Checking participant created at: "
-                        + participantRef
-        );
-
-        participantRef
-                .addListenerForSingleValueEvent(
-                        new ValueEventListener() {
-
-                            @Override
-                            public void onDataChange(
-                                    @NonNull DataSnapshot snapshot
-                            ) {
-
-                                Boolean participant =
-                                        snapshot.getValue(
-                                                Boolean.class
-                                        );
-
-                                Log.d(
-                                        TAG,
-                                        "Participant verification result: "
-                                                + participant
-                                );
-
-                                if (Boolean.TRUE.equals(
-                                        participant
-                                )) {
-
-                                    Log.d(
-                                            TAG,
-                                            "Participant verified. "
-                                                    + "Starting Firebase chat."
-                                    );
-
-                                    setupFirebase();
-
-                                    /*
-                                     * This still resets unreadCount.
-                                     * Actual message read-state is handled
-                                     * when messages arrive from Firebase.
-                                     */
-                                    markMessagesAsRead();
-
-                                } else {
-
-                                    Log.e(
-                                            TAG,
-                                            "Cloud Function returned success "
-                                                    + "but participant was not created."
-                                    );
-
-                                    Toast.makeText(
-                                            ChatActivity.this,
-                                            "Chat participant initialization failed",
-                                            Toast.LENGTH_LONG
-                                    ).show();
-
-                                    finish();
-                                }
-                            }
-
-                            @Override
-                            public void onCancelled(
-                                    @NonNull DatabaseError error
-                            ) {
-
-                                Log.e(
-                                        TAG,
-                                        "Participant verification failed",
-                                        error.toException()
-                                );
-
-                                Toast.makeText(
-                                        ChatActivity.this,
-                                        "Unable to verify chat access: "
-                                                + error.getMessage(),
-                                        Toast.LENGTH_LONG
-                                ).show();
-
-                                finish();
-                            }
-                        }
-                );
+        return !isFinishing()
+                && !isDestroyed();
     }
 
-    private void initViews() {
+    // =========================================================
+    // INITIALIZATION
+    // =========================================================
+
+    private boolean initViews() {
 
         recyclerView =
-                findViewById(
-                        R.id.recyclerViewChat
-                );
+                findViewById(R.id.recyclerViewChat);
 
         etMessage =
-                findViewById(
-                        R.id.etMessage
-                );
+                findViewById(R.id.etMessage);
 
         btnSend =
-                findViewById(
-                        R.id.btnSend
-                );
+                findViewById(R.id.btnSend);
 
         btnAttach =
-                findViewById(
-                        R.id.btnAttach
-                );
+                findViewById(R.id.btnAttach);
 
         btnBack =
-                findViewById(
-                        R.id.btnBack
-                );
+                findViewById(R.id.btnBack);
 
         btnMic =
-                findViewById(
-                        R.id.btnMic
-                );
+                findViewById(R.id.btnMic);
 
         btnVideoCall =
-                findViewById(
-                        R.id.btnVideoCall
-                );
+                findViewById(R.id.btnVideoCall);
 
         tvUserName =
-                findViewById(
-                        R.id.tvUserName
-                );
+                findViewById(R.id.tvUserName);
 
         ivProfilePhoto =
-                findViewById(
-                        R.id.ivProfilePhoto
-                );
+                findViewById(R.id.ivProfilePhoto);
 
         llRecordingOverlay =
-                findViewById(
-                        R.id.llRecordingOverlay
-                );
+                findViewById(R.id.llRecordingOverlay);
 
         tvRecordingTime =
-                findViewById(
-                        R.id.tvRecordingTime
-                );
+                findViewById(R.id.tvRecordingTime);
 
         viewVisualizer =
-                findViewById(
-                        R.id.viewVisualizer
-                );
+                findViewById(R.id.viewVisualizer);
 
         if (recyclerView == null
+                || etMessage == null
                 || btnSend == null
-                || etMessage == null) {
+                || btnBack == null
+                || tvUserName == null) {
 
-            Toast.makeText(
-                    this,
-                    "UI initialization error",
-                    Toast.LENGTH_SHORT
-            ).show();
+            showErrorAndFinish(
+                    "Chat UI initialization error"
+            );
 
-            finish();
-            return;
+            return false;
         }
 
         adapter =
@@ -512,9 +304,7 @@ public class ChatActivity extends BaseActivity {
                 layoutManager
         );
 
-        recyclerView.setAdapter(
-                adapter
-        );
+        recyclerView.setAdapter(adapter);
 
         btnSend.setOnClickListener(
                 v -> sendTextMessage()
@@ -545,9 +335,14 @@ public class ChatActivity extends BaseActivity {
                                 return true;
 
                             case MotionEvent.ACTION_UP:
+
+                                stopVoiceRecordingAndSend(true);
+
+                                return true;
+
                             case MotionEvent.ACTION_CANCEL:
 
-                                stopVoiceRecordingAndSend();
+                                stopVoiceRecordingAndSend(false);
 
                                 return true;
 
@@ -565,16 +360,214 @@ public class ChatActivity extends BaseActivity {
                     v -> CallHelper.startCall(
                             ChatActivity.this,
                             otherUserId,
-                            tvUserName != null
-                                    ? tvUserName.getText().toString()
-                                    : "User",
+                            tvUserName.getText().toString(),
                             null
                     )
             );
         }
+
+        return true;
     }
 
-    // ================== PROFILE PHOTO ==================
+    // =========================================================
+    // CHAT PARTICIPANT INITIALIZATION
+    // =========================================================
+
+    private void ensureCurrentUserParticipant() {
+
+        if (chatId == null
+                || currentUserId == null
+                || otherUserId == null) {
+
+            showErrorAndFinish(
+                    "Unable to initialize chat"
+            );
+
+            return;
+        }
+
+        Map<String, Object> data =
+                new HashMap<>();
+
+        data.put(
+                "otherUserId",
+                otherUserId
+        );
+
+        try {
+
+            FirebaseFunctions functions =
+                    FirebaseFunctions.getInstance(
+                            "europe-west1"
+                    );
+
+            functions
+                    .getHttpsCallable(
+                            "ensureChatParticipant"
+                    )
+                    .call(data)
+                    .addOnSuccessListener(result -> {
+
+                        if (!isActivityAvailable()) {
+                            return;
+                        }
+
+                        Log.d(
+                                TAG,
+                                "ensureChatParticipant succeeded"
+                        );
+
+                        verifyParticipantCreated();
+                    })
+                    .addOnFailureListener(error -> {
+
+                        Log.e(
+                                TAG,
+                                "ensureChatParticipant failed",
+                                error
+                        );
+
+                        if (!isActivityAvailable()) {
+                            return;
+                        }
+
+                        String message =
+                                error.getMessage() != null
+                                        ? error.getMessage()
+                                        : "Unknown error";
+
+                        showErrorAndFinish(
+                                "Chat initialization failed: "
+                                        + message
+                        );
+                    });
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Cloud Function exception",
+                    e
+            );
+
+            showErrorAndFinish(
+                    "Chat initialization error"
+            );
+        }
+    }
+
+    private void verifyParticipantCreated() {
+
+        DatabaseReference participantRef =
+                FirebaseDatabase
+                        .getInstance(FIREBASE_DB_URL)
+                        .getReference("chats")
+                        .child(chatId)
+                        .child("participants")
+                        .child(currentUserId);
+
+        participantRef.addListenerForSingleValueEvent(
+                new ValueEventListener() {
+
+                    @Override
+                    public void onDataChange(
+                            @NonNull DataSnapshot snapshot
+                    ) {
+
+                        if (!isActivityAvailable()) {
+                            return;
+                        }
+
+                        Boolean participant =
+                                snapshot.getValue(Boolean.class);
+
+                        if (Boolean.TRUE.equals(participant)) {
+
+                            setupFirebase();
+
+                        } else {
+
+                            showErrorAndFinish(
+                                    "Chat participant initialization failed"
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(
+                            @NonNull DatabaseError error
+                    ) {
+
+                        Log.e(
+                                TAG,
+                                "Participant verification failed",
+                                error.toException()
+                        );
+
+                        if (isActivityAvailable()) {
+
+                            showErrorAndFinish(
+                                    "Unable to verify chat access"
+                            );
+                        }
+                    }
+                }
+        );
+    }
+
+    // =========================================================
+    // PROFILE
+    // =========================================================
+
+    private void loadReceiverName() {
+
+        if (otherUserId == null) {
+            return;
+        }
+
+        FirebaseDatabase
+                .getInstance(FIREBASE_DB_URL)
+                .getReference("users")
+                .child(otherUserId)
+                .child("name")
+                .addListenerForSingleValueEvent(
+                        new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(
+                                    @NonNull DataSnapshot snapshot
+                            ) {
+
+                                if (!isActivityAvailable()) {
+                                    return;
+                                }
+
+                                String name =
+                                        snapshot.getValue(String.class);
+
+                                if (name != null
+                                        && !name.trim().isEmpty()) {
+
+                                    tvUserName.setText(
+                                            name.trim()
+                                    );
+                                }
+                            }
+
+                            @Override
+                            public void onCancelled(
+                                    @NonNull DatabaseError error
+                            ) {
+
+                                Log.w(
+                                        TAG,
+                                        "Could not load receiver name",
+                                        error.toException()
+                                );
+                            }
+                        }
+                );
+    }
 
     private void loadProfilePhoto() {
 
@@ -584,65 +577,67 @@ public class ChatActivity extends BaseActivity {
             return;
         }
 
-        try {
+        FirebaseDatabase
+                .getInstance(FIREBASE_DB_URL)
+                .getReference("users")
+                .child(otherUserId)
+                .child("photoUrl")
+                .addListenerForSingleValueEvent(
+                        new ValueEventListener() {
 
-            FirebaseDatabase
-                    .getInstance(FIREBASE_DB_URL)
-                    .getReference("users")
-                    .child(otherUserId)
-                    .child("photoUrl")
-                    .addListenerForSingleValueEvent(
-                            new ValueEventListener() {
+                            @Override
+                            public void onDataChange(
+                                    @NonNull DataSnapshot snapshot
+                            ) {
 
-                                @Override
-                                public void onDataChange(
-                                        @NonNull DataSnapshot snapshot
-                                ) {
-
-                                    String photoUrl =
-                                            snapshot.getValue(
-                                                    String.class
-                                            );
-
-                                    if (photoUrl != null
-                                            && !photoUrl.isEmpty()) {
-
-                                        try {
-
-                                            Glide.with(
-                                                            ChatActivity.this
-                                                    )
-                                                    .load(photoUrl)
-                                                    .placeholder(
-                                                            R.drawable.ic_profile_placeholder
-                                                    )
-                                                    .error(
-                                                            R.drawable.ic_profile_placeholder
-                                                    )
-                                                    .into(
-                                                            ivProfilePhoto
-                                                    );
-
-                                        } catch (Exception ignored) {
-                                        }
-                                    }
+                                if (!isActivityAvailable()) {
+                                    return;
                                 }
 
-                                @Override
-                                public void onCancelled(
-                                        @NonNull DatabaseError error
-                                ) {
+                                String photoUrl =
+                                        snapshot.getValue(String.class);
+
+                                if (photoUrl == null
+                                        || photoUrl.trim().isEmpty()) {
+
+                                    return;
                                 }
+
+                                Glide.with(ChatActivity.this)
+                                        .load(photoUrl)
+                                        .placeholder(
+                                                R.drawable.ic_profile_placeholder
+                                        )
+                                        .error(
+                                                R.drawable.ic_profile_placeholder
+                                        )
+                                        .into(ivProfilePhoto);
                             }
-                    );
 
-        } catch (Exception ignored) {
-        }
+                            @Override
+                            public void onCancelled(
+                                    @NonNull DatabaseError error
+                            ) {
+
+                                Log.w(
+                                        TAG,
+                                        "Profile photo loading cancelled",
+                                        error.toException()
+                                );
+                            }
+                        }
+                );
     }
 
-    // ================== VOICE RECORDING ==================
+    // =========================================================
+    // VOICE RECORDING
+    // =========================================================
 
     private void checkAndStartVoiceRecording() {
+
+        if (isRecordingAudio) {
+            return;
+        }
 
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -657,10 +652,10 @@ public class ChatActivity extends BaseActivity {
                     REQUEST_RECORD_AUDIO_PERMISSION
             );
 
-        } else {
-
-            startVoiceRecording();
+            return;
         }
+
+        startVoiceRecording();
     }
 
     @Override
@@ -676,36 +671,36 @@ public class ChatActivity extends BaseActivity {
                 grantResults
         );
 
-        if (requestCode
-                == REQUEST_RECORD_AUDIO_PERMISSION) {
+        if (requestCode != REQUEST_RECORD_AUDIO_PERMISSION) {
+            return;
+        }
 
-            if (grantResults.length > 0
-                    && grantResults[0]
-                    == PackageManager.PERMISSION_GRANTED) {
+        if (grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
-                startVoiceRecording();
+            Toast.makeText(
+                    this,
+                    "Microphone permission granted. Hold the microphone button to record.",
+                    Toast.LENGTH_SHORT
+            ).show();
 
-            } else {
+        } else {
 
-                Toast.makeText(
-                        this,
-                        "Microphone permission is required",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
+            Toast.makeText(
+                    this,
+                    "Microphone permission is required",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
     }
 
     private void startVoiceRecording() {
 
-        if (audioRecorder == null) {
-
-            audioRecorder =
-                    new AudioRecorder();
+        if (isRecordingAudio || !isActivityAvailable()) {
+            return;
         }
 
-        File cacheDir =
-                getCacheDir();
+        File cacheDir = getCacheDir();
 
         if (cacheDir == null) {
 
@@ -719,15 +714,17 @@ public class ChatActivity extends BaseActivity {
         }
 
         currentAudioFile =
-                cacheDir.getAbsolutePath()
-                        + "/voice_"
-                        + System.currentTimeMillis()
-                        + ".m4a";
+                new File(
+                        cacheDir,
+                        "voice_" + UUID.randomUUID() + ".m4a"
+                ).getAbsolutePath();
 
         recordingStartTime =
                 System.currentTimeMillis();
 
         try {
+
+            audioRecorder = new AudioRecorder();
 
             audioRecorder.startRecording(
                     currentAudioFile,
@@ -736,9 +733,25 @@ public class ChatActivity extends BaseActivity {
 
             isRecordingAudio = true;
 
+            if (tvRecordingTime != null) {
+                tvRecordingTime.setText("00:00");
+            }
+
             showRecordingOverlay();
 
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+
+            Log.e(
+                    TAG,
+                    "Voice recording failed to start",
+                    e
+            );
+
+            isRecordingAudio = false;
+
+            audioRecorder = null;
+
+            currentAudioFile = null;
 
             Toast.makeText(
                     this,
@@ -748,17 +761,26 @@ public class ChatActivity extends BaseActivity {
         }
     }
 
-    private void updateVisualizer(
-            int amplitude
-    ) {
+    private void updateVisualizer(int amplitude) {
 
-        if (viewVisualizer != null) {
+        if (viewVisualizer == null) {
+            return;
+        }
 
-            float scale =
-                    Math.min(
-                            amplitude / 32768f,
-                            1.0f
-                    );
+        float scale =
+                Math.min(
+                        Math.max(amplitude / 32768f, 0f),
+                        1f
+                );
+
+        runOnUiThread(() -> {
+
+            if (!isRecordingAudio
+                    || viewVisualizer == null
+                    || !isActivityAvailable()) {
+
+                return;
+            }
 
             viewVisualizer.setScaleX(
                     0.5f + scale * 1.5f
@@ -767,7 +789,7 @@ public class ChatActivity extends BaseActivity {
             viewVisualizer.setScaleY(
                     0.5f + scale * 1.5f
             );
-        }
+        });
     }
 
     private void showRecordingOverlay() {
@@ -790,119 +812,176 @@ public class ChatActivity extends BaseActivity {
                     View.GONE
             );
         }
+
+        if (viewVisualizer != null) {
+
+            viewVisualizer.setScaleX(1f);
+            viewVisualizer.setScaleY(1f);
+        }
     }
 
     private void startRecordingTimer() {
 
-        final long[] startTime = {
-                System.currentTimeMillis()
+        if (recordingHandler == null) {
+            return;
+        }
+
+        recordingHandler.removeCallbacksAndMessages(null);
+
+        Runnable timer = new Runnable() {
+
+            @Override
+            public void run() {
+
+                if (!isRecordingAudio
+                        || tvRecordingTime == null
+                        || !isActivityAvailable()) {
+
+                    return;
+                }
+
+                long elapsed =
+                        System.currentTimeMillis()
+                                - recordingStartTime;
+
+                long totalSeconds =
+                        elapsed / 1000L;
+
+                long minutes =
+                        totalSeconds / 60L;
+
+                long seconds =
+                        totalSeconds % 60L;
+
+                tvRecordingTime.setText(
+                        String.format(
+                                Locale.US,
+                                "%02d:%02d",
+                                minutes,
+                                seconds
+                        )
+                );
+
+                recordingHandler.postDelayed(
+                        this,
+                        1000
+                );
+            }
         };
 
-        recordingHandler.postDelayed(
-                new Runnable() {
-
-                    @Override
-                    public void run() {
-
-                        if (isRecordingAudio
-                                && tvRecordingTime != null) {
-
-                            long elapsed =
-                                    System.currentTimeMillis()
-                                            - startTime[0];
-
-                            long seconds =
-                                    elapsed / 1000;
-
-                            long minutes =
-                                    seconds / 60;
-
-                            seconds =
-                                    seconds % 60;
-
-                            tvRecordingTime.setText(
-                                    String.format(
-                                            "%02d:%02d",
-                                            minutes,
-                                            seconds
-                                    )
-                            );
-
-                            recordingHandler.postDelayed(
-                                    this,
-                                    1000
-                            );
-                        }
-                    }
-                },
-                0
-        );
+        recordingHandler.post(timer);
     }
 
-    private void stopVoiceRecordingAndSend() {
+    private void stopVoiceRecordingAndSend(boolean shouldSend) {
 
-        if (audioRecorder != null
-                && isRecordingAudio) {
+        if (!isRecordingAudio) {
+            return;
+        }
 
-            int duration =
-                    (int) (
-                            (
-                                    System.currentTimeMillis()
-                                            - recordingStartTime
-                            ) / 1000
-                    );
+        isRecordingAudio = false;
 
-            audioRecorder.stopRecording();
+        if (recordingHandler != null) {
 
-            isRecordingAudio = false;
+            recordingHandler.removeCallbacksAndMessages(null);
+        }
 
-            hideRecordingOverlay();
+        int duration =
+                (int) (
+                        (System.currentTimeMillis()
+                                - recordingStartTime) / 1000L
+                );
 
-            if (duration < 1) {
+        try {
+
+            if (audioRecorder != null) {
+                audioRecorder.stopRecording();
+            }
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Error stopping voice recorder",
+                    e
+            );
+
+            shouldSend = false;
+        }
+
+        audioRecorder = null;
+
+        hideRecordingOverlay();
+
+        String recordedPath = currentAudioFile;
+
+        currentAudioFile = null;
+
+        if (recordedPath == null) {
+            return;
+        }
+
+        File audioFile =
+                new File(recordedPath);
+
+        if (!shouldSend || duration < 1 || !audioFile.exists()) {
+
+            if (audioFile.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                audioFile.delete();
+            }
+
+            if (shouldSend && duration < 1) {
 
                 Toast.makeText(
                         this,
-                        "Too short",
+                        "Voice message is too short",
                         Toast.LENGTH_SHORT
                 ).show();
-
-                return;
             }
 
-            File audioFile =
-                    new File(currentAudioFile);
-
-            if (audioFile.exists()) {
-
-                if (Build.VERSION.SDK_INT
-                        >= Build.VERSION_CODES.N) {
-
-                    fileUri =
-                            FileProvider.getUriForFile(
-                                    this,
-                                    getPackageName()
-                                            + ".fileprovider",
-                                    audioFile
-                            );
-
-                } else {
-
-                    fileUri =
-                            Uri.fromFile(audioFile);
-                }
-
-                uploadVoiceMessageAndSend(
-                        duration
-                );
-            }
+            return;
         }
+
+        uploadVoiceMessageAndSend(
+                audioFile,
+                duration
+        );
     }
 
     private void uploadVoiceMessageAndSend(
+            @NonNull File audioFile,
             int duration
     ) {
 
-        if (fileUri == null) {
+        if (chatId == null || !audioFile.exists()) {
+            return;
+        }
+
+        Uri audioUri;
+
+        try {
+
+            audioUri =
+                    FileProvider.getUriForFile(
+                            this,
+                            getPackageName() + ".fileprovider",
+                            audioFile
+                    );
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Could not create voice file URI",
+                    e
+            );
+
+            Toast.makeText(
+                    this,
+                    "Unable to prepare voice message",
+                    Toast.LENGTH_SHORT
+            ).show();
+
             return;
         }
 
@@ -913,60 +992,59 @@ public class ChatActivity extends BaseActivity {
         ).show();
 
         String fileName =
-                System.currentTimeMillis()
-                        + "_"
-                        + (
-                        fileUri.getLastPathSegment() != null
-                                ? fileUri.getLastPathSegment()
-                                : "voice.m4a"
-                );
+                "voice_" + UUID.randomUUID() + ".m4a";
 
         StorageReference storageRef =
                 FirebaseStorage
                         .getInstance()
-                        .getReference(
-                                "chat_attachments"
-                        )
+                        .getReference("chat_attachments")
                         .child(chatId)
                         .child(fileName);
 
         storageRef
-                .putFile(fileUri)
+                .putFile(audioUri)
                 .continueWithTask(task -> {
 
                     if (!task.isSuccessful()) {
 
                         throw task.getException() != null
                                 ? task.getException()
-                                : new Exception(
-                                "Upload failed"
-                        );
+                                : new Exception("Voice upload failed");
                     }
 
                     return storageRef.getDownloadUrl();
-
                 })
                 .addOnCompleteListener(task -> {
 
-                    if (task.isSuccessful()) {
+                    if (!isActivityAvailable()) {
+                        return;
+                    }
 
-                        String downloadUrl =
-                                task.getResult()
-                                        .toString();
+                    if (task.isSuccessful()
+                            && task.getResult() != null) {
 
                         sendVoiceMessage(
-                                downloadUrl,
+                                task.getResult().toString(),
                                 duration
                         );
 
                     } else {
 
+                        Log.e(
+                                TAG,
+                                "Voice upload failed",
+                                task.getException()
+                        );
+
                         Toast.makeText(
                                 this,
-                                "Upload failed",
-                                Toast.LENGTH_SHORT
+                                "Voice upload failed",
+                                Toast.LENGTH_LONG
                         ).show();
                     }
+
+                    //noinspection ResultOfMethodCallIgnored
+                    audioFile.delete();
                 });
     }
 
@@ -991,7 +1069,7 @@ public class ChatActivity extends BaseActivity {
         long timestamp =
                 System.currentTimeMillis();
 
-        ChatMessage msg =
+        ChatMessage message =
                 new ChatMessage(
                         msgId,
                         currentUserId,
@@ -1001,112 +1079,57 @@ public class ChatActivity extends BaseActivity {
                         timestamp
                 );
 
-        msg.setVoiceDuration(duration);
+        message.setVoiceDuration(duration);
 
         chatRef
                 .child(msgId)
-                .setValue(msg)
-                .addOnSuccessListener(
-                        aVoid ->
-                                updateChatMeta(
-                                        "Voice message",
-                                        timestamp,
-                                        "voice"
-                                )
-                )
-                .addOnFailureListener(
-                        error -> Log.e(
-                                TAG,
-                                "Voice message send failed",
-                                error
-                        )
-                );
-    }
+                .setValue(message)
+                .addOnSuccessListener(aVoid -> {
 
-    // ================== FIREBASE ==================
+                    updateChatMeta(
+                            "Voice message",
+                            timestamp,
+                            "voice"
+                    );
+                })
+                .addOnFailureListener(error -> {
 
-    private void loadReceiverName() {
-
-        if (otherUserId == null) {
-            return;
-        }
-
-        try {
-
-            FirebaseDatabase
-                    .getInstance(FIREBASE_DB_URL)
-                    .getReference("users")
-                    .child(otherUserId)
-                    .child("name")
-                    .addListenerForSingleValueEvent(
-                            new ValueEventListener() {
-
-                                @Override
-                                public void onDataChange(
-                                        @NonNull DataSnapshot snapshot
-                                ) {
-
-                                    String name =
-                                            snapshot.getValue(
-                                                    String.class
-                                            );
-
-                                    if (name != null
-                                            && tvUserName != null) {
-
-                                        tvUserName.setText(
-                                                name
-                                        );
-                                    }
-                                }
-
-                                @Override
-                                public void onCancelled(
-                                        @NonNull DatabaseError error
-                                ) {
-                                }
-                            }
+                    Log.e(
+                            TAG,
+                            "Voice message database write failed",
+                            error
                     );
 
-        } catch (Exception ignored) {
-        }
+                    Toast.makeText(
+                            this,
+                            "Could not send voice message",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                });
     }
+
+    // =========================================================
+    // FIREBASE MESSAGE LISTENER
+    // =========================================================
 
     private void setupFirebase() {
 
-        if (chatId == null
-                || chatId.isEmpty()) {
-
+        if (chatId == null || chatId.isEmpty()) {
             return;
         }
 
-        if (msgListener != null
-                && chatRef != null) {
-
-            try {
-
-                chatRef.removeEventListener(
-                        msgListener
-                );
-
-            } catch (Exception ignored) {
-            }
-        }
+        removeMessagesListener();
 
         try {
 
             chatRef =
                     FirebaseDatabase
-                            .getInstance(
-                                    FIREBASE_DB_URL
-                            )
-                            .getReference(
-                                    "chats"
-                            )
+                            .getInstance(FIREBASE_DB_URL)
+                            .getReference("chats")
                             .child(chatId)
                             .child("messages");
 
-            Query query =
+            messagesQuery =
                     chatRef
                             .orderByKey()
                             .limitToLast(50);
@@ -1117,66 +1140,82 @@ public class ChatActivity extends BaseActivity {
                         @Override
                         public void onChildAdded(
                                 @NonNull DataSnapshot snapshot,
-                                String previousChildName
+                                @Nullable String previousChildName
                         ) {
 
-                            ChatMessage msg =
-                                    snapshot.getValue(
-                                            ChatMessage.class
-                                    );
+                            if (!isActivityAvailable()) {
+                                return;
+                            }
 
-                            if (msg != null
-                                    && adapter != null) {
+                            ChatMessage message =
+                                    snapshot.getValue(ChatMessage.class);
 
-                                messageList.add(msg);
+                            if (message == null || adapter == null) {
+                                return;
+                            }
 
-                                adapter.notifyItemInserted(
-                                        messageList.size() - 1
+                            String messageId = message.getId();
+
+                            if (messageId == null) {
+                                Log.w(
+                                        TAG,
+                                        "Message without ID received: "
+                                                + snapshot.getKey()
                                 );
 
-                                if (recyclerView != null) {
+                                return;
+                            }
 
-                                    recyclerView.smoothScrollToPosition(
-                                            messageList.size() - 1
-                                    );
+                            // Prevent duplicate insertion.
+                            for (ChatMessage existing : messageList) {
+
+                                if (existing != null
+                                        && messageId.equals(existing.getId())) {
+
+                                    return;
                                 }
+                            }
 
-                                /*
-                                 * FIX:
-                                 * markMessagesAsRead() can run before
-                                 * Firebase has delivered messages into
-                                 * messageList.
-                                 *
-                                 * Therefore each incoming unread message
-                                 * is marked as read here, immediately
-                                 * after it is received.
-                                 */
-                                if (msg.getSenderId() != null
-                                        && !msg.getSenderId().equals(currentUserId)
-                                        && !msg.isRead()
-                                        && msg.getId() != null) {
+                            boolean wasAtBottom =
+                                    recyclerView == null
+                                            || !recyclerView.canScrollVertically(1);
 
-                                    markSingleMessageAsRead(msg);
-                                }
+                            messageList.add(message);
+
+                            int position =
+                                    messageList.size() - 1;
+
+                            adapter.notifyItemInserted(position);
+
+                            if (wasAtBottom && recyclerView != null) {
+
+                                recyclerView.scrollToPosition(position);
+                            }
+
+                            // Mark incoming messages as read.
+                            if (message.getSenderId() != null
+                                    && !message.getSenderId().equals(currentUserId)
+                                    && !message.isRead()) {
+
+                                markSingleMessageAsRead(message);
                             }
                         }
 
                         @Override
                         public void onChildChanged(
                                 @NonNull DataSnapshot snapshot,
-                                String previousChildName
+                                @Nullable String previousChildName
                         ) {
 
-                            /*
-                             * Keep local model synchronized with Firebase.
-                             */
-                            ChatMessage updatedMsg =
-                                    snapshot.getValue(
-                                            ChatMessage.class
-                                    );
+                            if (!isActivityAvailable()) {
+                                return;
+                            }
 
-                            if (updatedMsg == null
-                                    || updatedMsg.getId() == null) {
+                            ChatMessage updatedMessage =
+                                    snapshot.getValue(ChatMessage.class);
+
+                            if (updatedMessage == null
+                                    || updatedMessage.getId() == null) {
 
                                 return;
                             }
@@ -1185,22 +1224,22 @@ public class ChatActivity extends BaseActivity {
                                  i < messageList.size();
                                  i++) {
 
-                                ChatMessage localMsg =
+                                ChatMessage localMessage =
                                         messageList.get(i);
 
-                                if (localMsg != null
-                                        && updatedMsg.getId().equals(
-                                        localMsg.getId()
+                                if (localMessage != null
+                                        && updatedMessage.getId().equals(
+                                        localMessage.getId()
                                 )) {
 
-                                    localMsg.setRead(
-                                            updatedMsg.isRead()
+                                    // Replace the entire model, not only
+                                    // its read property.
+                                    messageList.set(
+                                            i,
+                                            updatedMessage
                                     );
 
-                                    if (adapter != null) {
-
-                                        adapter.notifyItemChanged(i);
-                                    }
+                                    adapter.notifyItemChanged(i);
 
                                     break;
                                 }
@@ -1211,13 +1250,45 @@ public class ChatActivity extends BaseActivity {
                         public void onChildRemoved(
                                 @NonNull DataSnapshot snapshot
                         ) {
+
+                            if (!isActivityAvailable()) {
+                                return;
+                            }
+
+                            String removedId =
+                                    snapshot.getKey();
+
+                            if (removedId == null) {
+                                return;
+                            }
+
+                            for (int i = 0;
+                                 i < messageList.size();
+                                 i++) {
+
+                                ChatMessage message =
+                                        messageList.get(i);
+
+                                if (message != null
+                                        && removedId.equals(message.getId())) {
+
+                                    messageList.remove(i);
+
+                                    adapter.notifyItemRemoved(i);
+
+                                    break;
+                                }
+                            }
                         }
 
                         @Override
                         public void onChildMoved(
                                 @NonNull DataSnapshot snapshot,
-                                String previousChildName
+                                @Nullable String previousChildName
                         ) {
+
+                            // Messages are ordered by their push keys.
+                            // No local reorder is needed for this query.
                         }
 
                         @Override
@@ -1231,16 +1302,19 @@ public class ChatActivity extends BaseActivity {
                                     error.toException()
                             );
 
-                            Toast.makeText(
-                                    ChatActivity.this,
-                                    "Failed to load messages: "
-                                            + error.getMessage(),
-                                    Toast.LENGTH_LONG
-                            ).show();
+                            if (isActivityAvailable()) {
+
+                                Toast.makeText(
+                                        ChatActivity.this,
+                                        "Failed to load messages: "
+                                                + error.getMessage(),
+                                        Toast.LENGTH_LONG
+                                ).show();
+                            }
                         }
                     };
 
-            query.addChildEventListener(
+            messagesQuery.addChildEventListener(
                     msgListener
             );
 
@@ -1260,44 +1334,99 @@ public class ChatActivity extends BaseActivity {
         }
     }
 
+    private void removeMessagesListener() {
+
+        if (messagesQuery != null
+                && msgListener != null) {
+
+            try {
+
+                messagesQuery.removeEventListener(
+                        msgListener
+                );
+
+            } catch (Exception e) {
+
+                Log.w(
+                        TAG,
+                        "Could not remove message listener",
+                        e
+                );
+            }
+        }
+
+        messagesQuery = null;
+        msgListener = null;
+    }
+
+    // =========================================================
+    // READ RECEIPTS
+    // =========================================================
+
     private void markSingleMessageAsRead(
-            @NonNull ChatMessage msg
+            @NonNull ChatMessage message
     ) {
 
         if (chatRef == null
-                || msg.getId() == null
                 || currentUserId == null
-                || msg.getSenderId() == null
-                || msg.getSenderId().equals(currentUserId)
-                || msg.isRead()) {
+                || message.getId() == null
+                || message.getSenderId() == null
+                || message.getSenderId().equals(currentUserId)
+                || message.isRead()) {
 
             return;
         }
 
-        msg.setRead(true);
+        // Optimistic local update.
+        message.setRead(true);
+
+        notifyMessageChanged(message.getId());
 
         chatRef
-                .child(msg.getId())
+                .child(message.getId())
                 .child("read")
                 .setValue(true)
-                .addOnFailureListener(
-                        error -> {
+                .addOnFailureListener(error -> {
 
-                            /*
-                             * If the server rejects the write,
-                             * restore local state so UI does not
-                             * falsely claim it was read.
-                             */
-                            msg.setRead(false);
+                    Log.e(
+                            TAG,
+                            "Failed to mark message as read",
+                            error
+                    );
 
-                            Log.e(
-                                    TAG,
-                                    "Failed to mark message as read",
-                                    error
-                            );
-                        }
-                );
+                    // Restore local state if Firebase rejects the write.
+                    message.setRead(false);
+
+                    notifyMessageChanged(message.getId());
+                });
     }
+
+    private void notifyMessageChanged(String messageId) {
+
+        if (adapter == null) {
+            return;
+        }
+
+        for (int i = 0;
+             i < messageList.size();
+             i++) {
+
+            ChatMessage message =
+                    messageList.get(i);
+
+            if (message != null
+                    && messageId.equals(message.getId())) {
+
+                adapter.notifyItemChanged(i);
+
+                return;
+            }
+        }
+    }
+
+    // =========================================================
+    // SEND TEXT MESSAGE
+    // =========================================================
 
     private void sendTextMessage() {
 
@@ -1350,7 +1479,7 @@ public class ChatActivity extends BaseActivity {
         long timestamp =
                 System.currentTimeMillis();
 
-        ChatMessage msg =
+        ChatMessage message =
                 new ChatMessage(
                         msgId,
                         currentUserId,
@@ -1362,43 +1491,47 @@ public class ChatActivity extends BaseActivity {
 
         chatRef
                 .child(msgId)
-                .setValue(msg)
-                .addOnSuccessListener(
-                        aVoid -> {
+                .setValue(message)
+                .addOnSuccessListener(aVoid -> {
 
-                            if (etMessage != null) {
+                    if ("text".equals(type)
+                            && etMessage != null) {
 
-                                etMessage.setText("");
-                            }
+                        etMessage.setText("");
+                    }
 
-                            updateChatMeta(
-                                    content,
-                                    timestamp,
-                                    type
-                            );
-                        }
-                )
-                .addOnFailureListener(
-                        error -> {
+                    updateChatMeta(
+                            content,
+                            timestamp,
+                            type
+                    );
+                })
+                .addOnFailureListener(error -> {
 
-                            Log.e(
-                                    TAG,
-                                    "Message send failed",
-                                    error
-                            );
+                    Log.e(
+                            TAG,
+                            "Message send failed",
+                            error
+                    );
 
-                            Toast.makeText(
-                                    this,
-                                    "Message failed: "
-                                            + error.getMessage(),
-                                    Toast.LENGTH_LONG
-                            ).show();
-                        }
-                );
+                    if (isActivityAvailable()) {
+
+                        Toast.makeText(
+                                this,
+                                "Message failed: "
+                                        + error.getMessage(),
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                });
     }
 
+    // =========================================================
+    // CHAT METADATA
+    // =========================================================
+
     private void updateChatMeta(
-            String lastMsg,
+            String lastMessage,
             long timestamp,
             String type
     ) {
@@ -1412,199 +1545,133 @@ public class ChatActivity extends BaseActivity {
 
         try {
 
-            DatabaseReference userChatsRef =
+            /*
+             * IMPORTANT:
+             *
+             * RTDB Rules allow the authenticated user to write
+             * only their own user_chats/{uid} branch.
+             *
+             * Therefore this client updates ONLY:
+             *
+             * user_chats/{currentUserId}/{otherUserId}
+             *
+             * Updating the recipient's branch must be handled
+             * by a trusted backend function.
+             */
+
+            DatabaseReference ownChatRef =
                     FirebaseDatabase
-                            .getInstance(
-                                    FIREBASE_DB_URL
-                            )
-                            .getReference(
-                                    "user_chats"
-                            );
+                            .getInstance(FIREBASE_DB_URL)
+                            .getReference("user_chats")
+                            .child(currentUserId)
+                            .child(otherUserId);
 
             Map<String, Object> updates =
                     new HashMap<>();
 
-            updates.put(
-                    currentUserId
-                            + "/"
-                            + otherUserId
-                            + "/lastMessage",
-                    lastMsg
-            );
+            updates.put("lastMessage", lastMessage);
+            updates.put("timestamp", timestamp);
+            updates.put("chatId", chatId);
+            updates.put("lastMessageType", type);
 
-            updates.put(
-                    currentUserId
-                            + "/"
-                            + otherUserId
-                            + "/timestamp",
-                    timestamp
-            );
+            ownChatRef
+                    .updateChildren(updates)
+                    .addOnFailureListener(error -> {
 
-            updates.put(
-                    currentUserId
-                            + "/"
-                            + otherUserId
-                            + "/chatId",
-                    chatId
-            );
-
-            updates.put(
-                    currentUserId
-                            + "/"
-                            + otherUserId
-                            + "/lastMessageType",
-                    type
-            );
-
-            Map<String, Object> otherUpdates =
-                    new HashMap<>();
-
-            otherUpdates.put(
-                    "lastMessage",
-                    lastMsg
-            );
-
-            otherUpdates.put(
-                    "timestamp",
-                    timestamp
-            );
-
-            otherUpdates.put(
-                    "chatId",
-                    chatId
-            );
-
-            otherUpdates.put(
-                    "lastMessageType",
-                    type
-            );
-
-            otherUpdates.put(
-                    "unreadCount",
-                    ServerValue.increment(1)
-            );
-
-            updates.put(
-                    otherUserId
-                            + "/"
-                            + currentUserId,
-                    otherUpdates
-            );
-
-            userChatsRef.updateChildren(
-                    updates
-            );
+                        Log.e(
+                                TAG,
+                                "Own chat metadata update failed",
+                                error
+                        );
+                    });
 
         } catch (Exception e) {
 
             Log.e(
                     TAG,
-                    "Failed to update chat metadata",
+                    "Chat metadata update exception",
                     e
             );
         }
     }
 
-    private void markMessagesAsRead() {
-
-        if (currentUserId == null
-                || otherUserId == null) {
-
-            return;
-        }
-
-        try {
-
-            FirebaseDatabase
-                    .getInstance(
-                            FIREBASE_DB_URL
-                    )
-                    .getReference(
-                            "user_chats"
-                    )
-                    .child(currentUserId)
-                    .child(otherUserId)
-                    .child("unreadCount")
-                    .setValue(0);
-
-            for (ChatMessage msg :
-                    messageList) {
-
-                if (msg != null
-                        && msg.getSenderId() != null
-                        && !msg.getSenderId()
-                        .equals(currentUserId)
-                        && !msg.isRead()
-                        && chatRef != null
-                        && msg.getId() != null) {
-
-                    markSingleMessageAsRead(msg);
-                }
-            }
-
-            if (adapter != null) {
-
-                adapter.notifyDataSetChanged();
-            }
-
-        } catch (Exception e) {
-
-            Log.e(
-                    TAG,
-                    "Failed to mark messages as read",
-                    e
-            );
-        }
-    }
-
-    // ================== ATTACHMENTS ==================
+    // =========================================================
+    // ATTACHMENT PICKER
+    // =========================================================
 
     private void showAttachmentDialog() {
 
-        try {
+        String[] options = {
+                "Image",
+                "File"
+        };
 
-            String[] options = {
-                    "Image",
-                    "File"
-            };
+        new AlertDialog.Builder(this)
+                .setTitle("Attach")
+                .setItems(
+                        options,
+                        (dialog, which) -> {
 
-            new AlertDialog.Builder(this)
-                    .setTitle("Attach")
-                    .setItems(
-                            options,
-                            (dialog, which) -> {
+                            Intent intent =
+                                    new Intent(Intent.ACTION_GET_CONTENT);
 
-                                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                                intent.setType(which == 0 ? "image/*" : "*/*");
+                            intent.addCategory(
+                                    Intent.CATEGORY_OPENABLE
+                            );
+
+                            if (which == 0) {
+
+                                intent.setType("image/*");
+
                                 intent.putExtra(
                                         Intent.EXTRA_MIME_TYPES,
-                                        which == 0
-                                                ? new String[]{"image/jpeg", "image/png", "image/webp", "image/gif"}
-                                                : CHAT_ATTACHMENT_MIME_TYPES
+                                        new String[]{
+                                                "image/jpeg",
+                                                "image/png",
+                                                "image/webp",
+                                                "image/gif"
+                                        }
                                 );
 
-                                try {
-                                    startActivityForResult(
-                                            Intent.createChooser(intent, "Choose attachment"),
-                                            which == 0 ? PICK_IMAGE : PICK_FILE
-                                    );
-                                } catch (Exception e) {
-                                    Toast.makeText(this, "No compatible file picker is available", Toast.LENGTH_SHORT).show();
-                                }
+                            } else {
 
+                                intent.setType("*/*");
+
+                                intent.putExtra(
+                                        Intent.EXTRA_MIME_TYPES,
+                                        CHAT_ATTACHMENT_MIME_TYPES
+                                );
                             }
-                    )
-                    .show();
 
-        } catch (Exception e) {
+                            try {
 
-            Toast.makeText(
-                    this,
-                    "Attachment error",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
+                                startActivityForResult(
+                                        Intent.createChooser(
+                                                intent,
+                                                "Choose attachment"
+                                        ),
+                                        which == 0
+                                                ? PICK_IMAGE
+                                                : PICK_FILE
+                                );
+
+                            } catch (Exception e) {
+
+                                Log.e(
+                                        TAG,
+                                        "File picker could not be opened",
+                                        e
+                                );
+
+                                Toast.makeText(
+                                        this,
+                                        "No compatible file picker is available",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+                            }
+                        }
+                )
+                .show();
     }
 
     @Override
@@ -1620,40 +1687,128 @@ public class ChatActivity extends BaseActivity {
                 data
         );
 
-        if (resultCode == RESULT_OK
-                && data != null
-                && data.getData() != null) {
+        if (requestCode != PICK_IMAGE
+                && requestCode != PICK_FILE) {
 
-            fileUri =
-                    data.getData();
-
-            uploadFileAndSend(
-                    "file"
-            );
+            return;
         }
+
+        if (resultCode != RESULT_OK
+                || data == null
+                || data.getData() == null) {
+
+            return;
+        }
+
+        uploadFileAndSend(
+                data.getData(),
+                requestCode
+        );
     }
 
+    // =========================================================
+    // ATTACHMENT UPLOAD
+    // =========================================================
+
     private void uploadFileAndSend(
-            String messageType
+            @NonNull Uri uri,
+            int requestCode
     ) {
 
-        if (fileUri == null
-                || chatId == null) {
-
+        if (chatId == null) {
             return;
         }
 
-        ContentResolver resolver = getContentResolver();
-        String mimeType = resolver.getType(fileUri);
+        ContentResolver resolver =
+                getContentResolver();
+
+        String mimeType =
+                resolver.getType(uri);
+
         if (!isSupportedChatAttachmentMimeType(mimeType)) {
-            Toast.makeText(this, "Choose an image or a supported document type", Toast.LENGTH_LONG).show();
+
+            Toast.makeText(
+                    this,
+                    "Unsupported file type",
+                    Toast.LENGTH_LONG
+            ).show();
+
             return;
         }
-        long contentSize = getUriSize(fileUri);
+
+        if (requestCode == PICK_IMAGE
+                && !mimeType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+
+            Toast.makeText(
+                    this,
+                    "Please select an image",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        long contentSize =
+                getUriSize(uri);
+
+        if (contentSize < 0) {
+
+            Toast.makeText(
+                    this,
+                    "Unable to determine file size. Choose another file.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+            return;
+        }
+
         if (contentSize > MAX_CHAT_ATTACHMENT_BYTES) {
-            Toast.makeText(this, "Attachments must be 25 MB or smaller", Toast.LENGTH_LONG).show();
+
+            Toast.makeText(
+                    this,
+                    "Attachments must be 25 MB or smaller",
+                    Toast.LENGTH_LONG
+            ).show();
+
             return;
         }
+
+        String displayName =
+                getDisplayName(uri);
+
+        if (displayName == null
+                || displayName.trim().isEmpty()) {
+
+            displayName = "File";
+        }
+
+        String safeDisplayName =
+                sanitizeFileName(displayName);
+
+        String storageFileName =
+                UUID.randomUUID().toString();
+
+        String extension =
+                MimeTypeMap.getSingleton()
+                        .getExtensionFromMimeType(mimeType);
+
+        if (extension != null
+                && !extension.isEmpty()) {
+
+            storageFileName += "." + extension;
+        }
+
+        StorageReference storageRef =
+                FirebaseStorage
+                        .getInstance()
+                        .getReference("chat_attachments")
+                        .child(chatId)
+                        .child(storageFileName);
+
+        StorageMetadata metadata =
+                new StorageMetadata.Builder()
+                        .setContentType(mimeType)
+                        .build();
 
         Toast.makeText(
                 this,
@@ -1661,66 +1816,42 @@ public class ChatActivity extends BaseActivity {
                 Toast.LENGTH_SHORT
         ).show();
 
-        String fileName =
-                System.currentTimeMillis()
-                        + "_"
-                        + (
-                        fileUri.getLastPathSegment() != null
-                                ? fileUri.getLastPathSegment()
-                                : "file"
-                );
+        final String finalDisplayName =
+                safeDisplayName;
 
-        StorageReference storageRef =
-                FirebaseStorage
-                        .getInstance()
-                        .getReference(
-                                "chat_attachments"
-                        )
-                        .child(chatId)
-                        .child(fileName);
-
-        StorageMetadata metadata = new StorageMetadata.Builder()
-                .setContentType(mimeType)
-                .build();
+        final String finalType =
+                mimeType.toLowerCase(Locale.ROOT).startsWith("image/")
+                        ? "image"
+                        : "file";
 
         storageRef
-                .putFile(fileUri, metadata)
+                .putFile(uri, metadata)
                 .continueWithTask(task -> {
 
                     if (!task.isSuccessful()) {
 
                         throw task.getException() != null
                                 ? task.getException()
-                                : new Exception(
-                                "Upload failed"
-                        );
+                                : new Exception("Upload failed");
                     }
 
                     return storageRef.getDownloadUrl();
-
                 })
                 .addOnCompleteListener(task -> {
 
-                    if (task.isSuccessful()) {
+                    if (!isActivityAvailable()) {
+                        return;
+                    }
+
+                    if (task.isSuccessful()
+                            && task.getResult() != null) {
 
                         String downloadUrl =
-                                task.getResult()
-                                        .toString();
-
-                        String displayName =
-                                fileUri.getLastPathSegment();
-
-                        if (displayName == null
-                                || displayName.isEmpty()) {
-
-                            displayName = "File";
-                        }
-
-                        String finalType = mimeType.startsWith("image/") ? "image" : messageType;
+                                task.getResult().toString();
 
                         sendMessage(
                                 finalType,
-                                displayName,
+                                finalDisplayName,
                                 downloadUrl
                         );
 
@@ -1732,15 +1863,21 @@ public class ChatActivity extends BaseActivity {
 
                     } else {
 
-                        Exception e =
+                        Exception error =
                                 task.getException();
+
+                        Log.e(
+                                TAG,
+                                "Attachment upload failed",
+                                error
+                        );
 
                         Toast.makeText(
                                 this,
                                 "Upload failed: "
                                         + (
-                                        e != null
-                                                ? e.getMessage()
+                                        error != null
+                                                ? error.getMessage()
                                                 : "Unknown error"
                                 ),
                                 Toast.LENGTH_LONG
@@ -1749,25 +1886,137 @@ public class ChatActivity extends BaseActivity {
                 });
     }
 
-    private boolean isSupportedChatAttachmentMimeType(String mimeType) {
-        return mimeType != null
-                && Arrays.asList(CHAT_ATTACHMENT_MIME_TYPES).contains(mimeType.toLowerCase(java.util.Locale.ROOT));
+    private boolean isSupportedChatAttachmentMimeType(
+            String mimeType
+    ) {
+
+        if (mimeType == null) {
+            return false;
+        }
+
+        return Arrays.asList(
+                CHAT_ATTACHMENT_MIME_TYPES
+        ).contains(
+                mimeType.toLowerCase(Locale.ROOT)
+        );
     }
 
     private long getUriSize(Uri uri) {
-        try (AssetFileDescriptor descriptor = getContentResolver().openAssetFileDescriptor(uri, "r")) {
-            return descriptor == null ? -1 : descriptor.getLength();
-        } catch (Exception ignored) {
-            return -1;
+
+        try (Cursor cursor =
+                     getContentResolver().query(
+                             uri,
+                             new String[]{
+                                     OpenableColumns.SIZE
+                             },
+                             null,
+                             null,
+                             null
+                     )) {
+
+            if (cursor != null
+                    && cursor.moveToFirst()) {
+
+                int index =
+                        cursor.getColumnIndex(
+                                OpenableColumns.SIZE
+                        );
+
+                if (index >= 0
+                        && !cursor.isNull(index)) {
+
+                    return cursor.getLong(index);
+                }
+            }
+
+        } catch (Exception e) {
+
+            Log.w(
+                    TAG,
+                    "Could not read attachment size from provider",
+                    e
+            );
         }
+
+        return -1;
     }
 
-    public void openFile(
-            String fileUrl
-    ) {
+    private String getDisplayName(Uri uri) {
+
+        try (Cursor cursor =
+                     getContentResolver().query(
+                             uri,
+                             new String[]{
+                                     OpenableColumns.DISPLAY_NAME
+                             },
+                             null,
+                             null,
+                             null
+                     )) {
+
+            if (cursor != null
+                    && cursor.moveToFirst()) {
+
+                int index =
+                        cursor.getColumnIndex(
+                                OpenableColumns.DISPLAY_NAME
+                        );
+
+                if (index >= 0) {
+
+                    return cursor.getString(index);
+                }
+            }
+
+        } catch (Exception e) {
+
+            Log.w(
+                    TAG,
+                    "Could not read attachment display name",
+                    e
+            );
+        }
+
+        return null;
+    }
+
+    private String sanitizeFileName(String fileName) {
+
+        if (fileName == null) {
+            return "File";
+        }
+
+        String safe =
+                fileName.replaceAll(
+                        "[^a-zA-Z0-9._ -]",
+                        "_"
+                );
+
+        safe = safe.trim();
+
+        if (safe.isEmpty()
+                || safe.equals(".")
+                || safe.equals("..")) {
+
+            return "File";
+        }
+
+        if (safe.length() > 100) {
+
+            safe = safe.substring(0, 100);
+        }
+
+        return safe;
+    }
+
+    // =========================================================
+    // OPEN DOWNLOADED FILE
+    // =========================================================
+
+    public void openFile(String fileUrl) {
 
         if (fileUrl == null
-                || fileUrl.isEmpty()) {
+                || fileUrl.trim().isEmpty()) {
 
             Toast.makeText(
                     this,
@@ -1778,44 +2027,40 @@ public class ChatActivity extends BaseActivity {
             return;
         }
 
+        final URL parsedUrl;
+
         try {
 
-            Intent intent =
-                    new Intent(
-                            Intent.ACTION_VIEW
-                    );
+            parsedUrl = new URL(fileUrl);
 
-            intent.setDataAndType(
-                    Uri.parse(fileUrl),
-                    getMimeTypeFromUrl(fileUrl)
-            );
+        } catch (Exception e) {
 
-            intent.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-            );
+            Toast.makeText(
+                    this,
+                    "Invalid file URL",
+                    Toast.LENGTH_SHORT
+            ).show();
 
-            if (intent.resolveActivity(
-                    getPackageManager()
-            ) != null) {
+            return;
+        }
 
-                try {
+        /*
+         * Chat attachments must use HTTPS Firebase Storage URLs.
+         * Do not open arbitrary URLs supplied by a message.
+         */
 
-                    startActivity(
-                            Intent.createChooser(
-                                    intent,
-                                    "Open with"
-                            )
-                    );
+        if (!"https".equalsIgnoreCase(parsedUrl.getProtocol())
+                || !"firebasestorage.googleapis.com".equalsIgnoreCase(
+                parsedUrl.getHost()
+        )) {
 
-                    return;
+            Toast.makeText(
+                    this,
+                    "Unsupported file location",
+                    Toast.LENGTH_LONG
+            ).show();
 
-                } catch (
-                        ActivityNotFoundException ignored
-                ) {
-                }
-            }
-
-        } catch (Exception ignored) {
+            return;
         }
 
         Toast.makeText(
@@ -1826,150 +2071,180 @@ public class ChatActivity extends BaseActivity {
 
         new Thread(() -> {
 
-            HttpURLConnection connection =
-                    null;
+            HttpURLConnection connection = null;
+
+            File tempFile = null;
 
             try {
 
-                URL url =
-                        new URL(fileUrl);
-
                 connection =
-                        (HttpURLConnection)
-                                url.openConnection();
+                        (HttpURLConnection) parsedUrl.openConnection();
 
-                connection.setConnectTimeout(
-                        10000
-                );
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
+                connection.setRequestMethod("GET");
 
-                connection.setReadTimeout(
-                        10000
-                );
+                // Do not silently follow redirects to other hosts.
+                connection.setInstanceFollowRedirects(false);
 
-                connection.connect();
+                int responseCode =
+                        connection.getResponseCode();
 
-                String fName =
-                        Uri.parse(fileUrl)
-                                .getLastPathSegment();
+                if (responseCode != HttpURLConnection.HTTP_OK) {
 
-                if (fName == null
-                        || !fName.contains(".")) {
-
-                    fName =
-                            "file_"
-                                    + System.currentTimeMillis();
+                    throw new IOException(
+                            "Unexpected HTTP response: " + responseCode
+                    );
                 }
 
-                File tempFile =
-                        new File(
-                                getCacheDir(),
-                                fName
+                long contentLength =
+                        connection.getContentLengthLong();
+
+                if (contentLength > MAX_CHAT_ATTACHMENT_BYTES) {
+
+                    throw new IOException(
+                            "File exceeds the 25 MB limit"
+                    );
+                }
+
+                String originalName =
+                        parsedUrl.getPath();
+
+                if (originalName != null
+                        && originalName.contains("/")) {
+
+                    originalName =
+                            originalName.substring(
+                                    originalName.lastIndexOf('/') + 1
+                            );
+                }
+
+                String extension = "";
+
+                if (originalName != null) {
+
+                    int dot =
+                            originalName.lastIndexOf('.');
+
+                    if (dot >= 0
+                            && dot < originalName.length() - 1) {
+
+                        extension =
+                                originalName.substring(dot)
+                                        .replaceAll(
+                                                "[^a-zA-Z0-9.]",
+                                                ""
+                                        );
+                    }
+                }
+
+                if (extension.isEmpty()
+                        || extension.length() > 10) {
+
+                    extension = ".bin";
+                }
+
+                tempFile =
+                        File.createTempFile(
+                                "chat_",
+                                extension,
+                                getCacheDir()
                         );
+
+                long totalBytes = 0;
 
                 try (
                         InputStream input =
                                 connection.getInputStream();
 
-                        FileOutputStream out =
-                                new FileOutputStream(
-                                        tempFile
-                                )
+                        FileOutputStream output =
+                                new FileOutputStream(tempFile)
                 ) {
 
                     byte[] buffer =
-                            new byte[4096];
+                            new byte[8192];
 
                     int bytesRead;
 
-                    while (
-                            (
-                                    bytesRead =
-                                            input.read(buffer)
-                            ) != -1
-                    ) {
+                    while ((bytesRead = input.read(buffer)) != -1) {
 
-                        out.write(
+                        totalBytes += bytesRead;
+
+                        if (totalBytes > MAX_CHAT_ATTACHMENT_BYTES) {
+
+                            throw new IOException(
+                                    "File exceeds the 25 MB limit"
+                            );
+                        }
+
+                        output.write(
                                 buffer,
                                 0,
                                 bytesRead
                         );
                     }
+
+                    output.flush();
                 }
 
-                runOnUiThread(
-                        () -> openLocalFile(
-                                tempFile
-                        )
-                );
+                File downloadedFile = tempFile;
+
+                runOnUiThread(() -> {
+
+                    if (isActivityAvailable()) {
+
+                        openLocalFile(downloadedFile);
+
+                    } else {
+
+                        //noinspection ResultOfMethodCallIgnored
+                        downloadedFile.delete();
+                    }
+                });
 
             } catch (Exception e) {
 
-                runOnUiThread(
-                        () ->
-                                Toast.makeText(
-                                        this,
-                                        "Download failed: "
-                                                + (
-                                                e.getMessage() != null
-                                                        ? e.getMessage()
-                                                        : "Unknown error"
-                                        ),
-                                        Toast.LENGTH_LONG
-                                ).show()
+                Log.e(
+                        TAG,
+                        "File download failed",
+                        e
                 );
+
+                if (tempFile != null
+                        && tempFile.exists()) {
+
+                    //noinspection ResultOfMethodCallIgnored
+                    tempFile.delete();
+                }
+
+                runOnUiThread(() -> {
+
+                    if (isActivityAvailable()) {
+
+                        Toast.makeText(
+                                ChatActivity.this,
+                                "Download failed: "
+                                        + (
+                                        e.getMessage() != null
+                                                ? e.getMessage()
+                                                : "Unknown error"
+                                ),
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                });
 
             } finally {
 
                 if (connection != null) {
-
-                    try {
-                        connection.disconnect();
-                    } catch (Exception ignored) {
-                    }
+                    connection.disconnect();
                 }
             }
 
         }).start();
     }
 
-    private String getMimeTypeFromUrl(
-            String url
-    ) {
-
-        try {
-
-            String ext =
-                    MimeTypeMap
-                            .getFileExtensionFromUrl(
-                                    url
-                            );
-
-            if (ext != null
-                    && !ext.isEmpty()) {
-
-                String mimeType =
-                        MimeTypeMap
-                                .getSingleton()
-                                .getMimeTypeFromExtension(
-                                        ext.toLowerCase()
-                                );
-
-                if (mimeType != null
-                        && !mimeType.isEmpty()) {
-
-                    return mimeType;
-                }
-            }
-
-        } catch (Exception ignored) {
-        }
-
-        return "*/*";
-    }
-
-    private void openLocalFile(
-            File file
-    ) {
+    private void openLocalFile(File file) {
 
         if (file == null
                 || !file.exists()) {
@@ -1985,24 +2260,12 @@ public class ChatActivity extends BaseActivity {
 
         try {
 
-            Uri uri;
-
-            if (Build.VERSION.SDK_INT
-                    >= Build.VERSION_CODES.N) {
-
-                uri =
-                        FileProvider.getUriForFile(
-                                this,
-                                getPackageName()
-                                        + ".fileprovider",
-                                file
-                        );
-
-            } else {
-
-                uri =
-                        Uri.fromFile(file);
-            }
+            Uri uri =
+                    FileProvider.getUriForFile(
+                            this,
+                            getPackageName() + ".fileprovider",
+                            file
+                    );
 
             String mimeType =
                     getMimeType(file);
@@ -2014,9 +2277,7 @@ public class ChatActivity extends BaseActivity {
             }
 
             Intent intent =
-                    new Intent(
-                            Intent.ACTION_VIEW
-                    );
+                    new Intent(Intent.ACTION_VIEW);
 
             intent.setDataAndType(
                     uri,
@@ -2034,9 +2295,7 @@ public class ChatActivity extends BaseActivity {
                     )
             );
 
-        } catch (
-                ActivityNotFoundException e
-        ) {
+        } catch (ActivityNotFoundException e) {
 
             Toast.makeText(
                     this,
@@ -2046,6 +2305,12 @@ public class ChatActivity extends BaseActivity {
 
         } catch (Exception e) {
 
+            Log.e(
+                    TAG,
+                    "Could not open downloaded file",
+                    e
+            );
+
             Toast.makeText(
                     this,
                     "Error opening file",
@@ -2054,55 +2319,38 @@ public class ChatActivity extends BaseActivity {
         }
     }
 
-    private String getMimeType(
-            File file
-    ) {
+    private String getMimeType(File file) {
 
         if (file == null) {
             return null;
         }
 
-        try {
+        String extension =
+                MimeTypeMap.getFileExtensionFromUrl(
+                        file.getAbsolutePath()
+                );
 
-            String ext =
-                    MimeTypeMap
-                            .getFileExtensionFromUrl(
-                                    file.getAbsolutePath()
-                            );
+        if (extension == null
+                || extension.isEmpty()) {
 
-            if (ext != null
-                    && !ext.isEmpty()) {
-
-                return MimeTypeMap
-                        .getSingleton()
-                        .getMimeTypeFromExtension(
-                                ext.toLowerCase()
-                        );
-            }
-
-        } catch (Exception ignored) {
+            return null;
         }
 
-        return null;
+        return MimeTypeMap
+                .getSingleton()
+                .getMimeTypeFromExtension(
+                        extension.toLowerCase(Locale.ROOT)
+                );
     }
+
+    // =========================================================
+    // LIFECYCLE
+    // =========================================================
 
     @Override
     protected void onDestroy() {
 
-        super.onDestroy();
-
-        if (msgListener != null
-                && chatRef != null) {
-
-            try {
-
-                chatRef.removeEventListener(
-                        msgListener
-                );
-
-            } catch (Exception ignored) {
-            }
-        }
+        removeMessagesListener();
 
         if (adapter != null) {
 
@@ -2110,27 +2358,43 @@ public class ChatActivity extends BaseActivity {
 
                 adapter.stopPlaying();
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.w(
+                        TAG,
+                        "Could not stop voice playback",
+                        e
+                );
             }
         }
 
-        if (audioRecorder != null
-                && isRecordingAudio) {
+        if (isRecordingAudio) {
 
             try {
 
-                audioRecorder.stopRecording();
+                isRecordingAudio = false;
 
-            } catch (Exception ignored) {
+                if (audioRecorder != null) {
+                    audioRecorder.stopRecording();
+                }
+
+            } catch (Exception e) {
+
+                Log.w(
+                        TAG,
+                        "Could not stop audio recorder",
+                        e
+                );
             }
         }
 
+        audioRecorder = null;
+
         if (recordingHandler != null) {
 
-            recordingHandler
-                    .removeCallbacksAndMessages(
-                            null
-                    );
+            recordingHandler.removeCallbacksAndMessages(null);
         }
+
+        super.onDestroy();
     }
 }
